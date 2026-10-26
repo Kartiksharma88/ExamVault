@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: examvault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-examvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-examvault_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-examvault}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-examvault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: examvault-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-examvault_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-examvault_minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: examvault-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/$${MINIO_BUCKET:-examvault-images};
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-examvault_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-examvault_minio_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-examvault-images}
+
+  mailcatcher:
+    image: schickling/mailcatcher:latest
+    container_name: examvault-mail
+    restart: unless-stopped
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: examvault-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-examvault}:${POSTGRES_PASSWORD:-examvault_dev_password}@postgres:5432/${POSTGRES_DB:-examvault}?schema=public
+      MASTER_KEY: ${MASTER_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      AUDIT_SIGNING_KEY: ${AUDIT_SIGNING_KEY:-MC4CAQAwBQYDK2VwBCIEINXgqVzX7uF9xL6WJ6+Gv3P4J2yW8x9Q/bM1t9q7Yv3F}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-examvault_minio}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-examvault_minio_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-examvault-images}
+      CORS_ORIGIN: http://localhost:80,http://localhost:5173
+      SESSION_SECRET: ${SESSION_SECRET:-super_secret_session_key_examvault_32_chars_min}
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: examvault-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+
+volumes:
+  pgdata:
+  miniodata:

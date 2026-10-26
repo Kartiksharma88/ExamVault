@@ -1,0 +1,23 @@
+{
+  "name": "examvault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure examination paper generation framework",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @examvault/web run test:e2e",
+    "db:migrate": "pnpm --filter @examvault/api run db:migrate",
+    "db:seed": "pnpm --filter @examvault/api run db:seed",
+    "db:generate": "pnpm --filter @examvault/api run db:generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

@@ -1,0 +1,72 @@
+name: ExamVault CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: examvault
+          POSTGRES_PASSWORD: examvault_test_password
+          POSTGRES_DB: examvault_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadminpassword
+        ports:
+          - 9000:9000
+          - 9001:9001
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @examvault/api run db:generate
+
+      - name: Typecheck / Lint
+        run: pnpm -r run lint
+
+      - name: Run Unit Tests (Crypto + Service tests)
+        run: pnpm -r run test
+        env:
+          MASTER_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          AUDIT_SIGNING_KEY: MC4CAQAwBQYDK2VwBCIEINXgqVzX7uF9xL6WJ6+Gv3P4J2yW8x9Q/bM1t9q7Yv3F
+
+      - name: Build packages and apps
+        run: pnpm -r run build
