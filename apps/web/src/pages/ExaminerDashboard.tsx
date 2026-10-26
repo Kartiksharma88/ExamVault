@@ -21,10 +21,17 @@ interface QuestionItem {
   authorId: string;
   status: 'DRAFT' | 'SUBMITTED' | 'WITHDRAWN';
   currentVersion: number;
-  metadata: {
+  type?: string;
+  difficulty?: number;
+  cognitiveLevel?: string;
+  marks?: number;
+  negativeMarks?: number;
+  estimatedTime?: number;
+  language?: string;
+  metadata?: {
     subjectId: string;
     topicId?: string;
-    type: 'MCQ_SINGLE' | 'MCQ_MULTI' | 'INTEGER';
+    type: string;
     difficulty: number;
     cognitiveLevel: string;
     marks: number;
@@ -112,10 +119,12 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
   const filteredQuestions = questions.filter((q) => {
     if (!searchQuery) return true;
     const qStr = searchQuery.toLowerCase();
+    const type = q.metadata?.type || q.type || '';
+    const cog = q.metadata?.cognitiveLevel || q.cognitiveLevel || '';
     return (
       q.humanId.toLowerCase().includes(qStr) ||
-      q.metadata.cognitiveLevel.toLowerCase().includes(qStr) ||
-      q.metadata.type.toLowerCase().includes(qStr)
+      cog.toLowerCase().includes(qStr) ||
+      type.toLowerCase().includes(qStr)
     );
   });
 
@@ -266,16 +275,16 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                       {q.status}
                     </span>
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-text-secondary border border-border">
-                      {q.metadata.type}
+                      {q.metadata?.type || q.type}
                     </span>
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-blue-950/40 text-blue-300 border border-blue-900/40">
                       v{q.currentVersion}
                     </span>
                     <span className="text-[11px] px-2 py-0.5 rounded-md bg-purple-950/40 text-purple-300 border border-purple-900/40">
-                      Bloom: {q.metadata.cognitiveLevel}
+                      Bloom: {q.metadata?.cognitiveLevel || q.cognitiveLevel}
                     </span>
                     <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-950/40 text-indigo-300 border border-indigo-900/40">
-                      {q.metadata.language}
+                      {q.metadata?.language || q.language}
                     </span>
                   </div>
 
@@ -283,18 +292,18 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                     <span>
                       Difficulty:{' '}
                       <strong className="text-text-secondary font-mono">
-                        {q.metadata.difficulty.toFixed(2)}
+                        {(q.metadata?.difficulty ?? q.difficulty ?? 0.5).toFixed(2)}
                       </strong>
                     </span>
                     <span>
                       Marks:{' '}
-                      <strong className="text-emerald-400 font-mono">+{q.metadata.marks}</strong> /{' '}
-                      <strong className="text-rose-400 font-mono">-{q.metadata.negativeMarks}</strong>
+                      <strong className="text-emerald-400 font-mono">+{(q.metadata?.marks ?? q.marks ?? 1)}</strong> /{' '}
+                      <strong className="text-rose-400 font-mono">-{(q.metadata?.negativeMarks ?? q.negativeMarks ?? 0)}</strong>
                     </span>
                     <span>
                       Est. Time:{' '}
                       <strong className="text-text-secondary font-mono">
-                        {Math.round(q.metadata.estimatedTimeSeconds / 60)} min
+                        {Math.round((q.metadata?.estimatedTimeSeconds ?? q.estimatedTime ?? 120) / 60)} min
                       </strong>
                     </span>
                     <span>Created: {formatDate(q.createdAt)}</span>
