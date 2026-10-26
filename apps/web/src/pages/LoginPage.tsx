@@ -203,31 +203,37 @@ export const LoginPage: React.FC = () => {
           {/* Quick preset buttons for dev testing */}
           <div className="mt-6 pt-5 border-t border-border/80">
             <p className="text-[11px] font-mono uppercase text-text-muted text-center mb-2">
-              Synthetic Test Accounts
+              Synthetic Test Accounts (Click to Fill)
             </p>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => fillQuickCreds('admin@examvault.local', 'Admin123!@#$')}
+                onClick={() => fillQuickCreds('admin@examvault.local', 'Admin@ExamVault2024!')}
                 className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-text-secondary hover:text-white border border-border text-center transition-colors font-mono"
+                title="admin@examvault.local / Admin@ExamVault2024!"
               >
                 Admin
               </button>
               <button
                 type="button"
-                onClick={() => fillQuickCreds('examiner1@examvault.local', 'Examiner123!@#$')}
+                onClick={() => fillQuickCreds('examiner1@examvault.local', 'Examiner@2024!pass')}
                 className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-text-secondary hover:text-white border border-border text-center transition-colors font-mono"
+                title="examiner1@examvault.local / Examiner@2024!pass"
               >
                 Examiner
               </button>
               <button
                 type="button"
-                onClick={() => fillQuickCreds('auditor@examvault.local', 'Auditor123!@#$')}
+                onClick={() => fillQuickCreds('auditor@examvault.local', 'Examiner@2024!pass')}
                 className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-text-secondary hover:text-white border border-border text-center transition-colors font-mono"
+                title="auditor@examvault.local / Examiner@2024!pass"
               >
                 Auditor
               </button>
             </div>
+            <p className="text-[10px] text-text-muted text-center mt-2 font-mono">
+              Pass: <span className="text-cyan-400">Examiner@2024!pass</span> (Users) / <span className="text-cyan-400">Admin@ExamVault2024!</span>
+            </p>
           </div>
         </div>
       </div>
