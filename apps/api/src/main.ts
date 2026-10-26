@@ -38,6 +38,9 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'X-CSRF-Token'],
   });
 
+  // Global prefix
+  app.setGlobalPrefix('api');
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({

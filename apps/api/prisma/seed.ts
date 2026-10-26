@@ -9,9 +9,41 @@
  * 5. 200+ synthetic questions with encrypted content
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
+
+function loadEnv() {
+  const envPaths = [
+    path.resolve(__dirname, '../.env'),
+    path.resolve(__dirname, '../../../.env'),
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'apps/api/.env'),
+  ];
+  for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  }
+}
+loadEnv();
 
 const prisma = new PrismaClient();
 
@@ -293,15 +325,21 @@ async function main() {
     create: { examId: exam.id, name: 'Mathematics', code: 'MAT', nextSeq: 1 },
   });
 
+  function deterministicUuid(str: string): string {
+    const hex = crypto.createHash('md5').update(str).digest('hex');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
+
   // Physics topics
   const phyTopics = ['Mechanics', 'Electrostatics', 'Optics', 'Waves', 'Thermodynamics', 'Gravitation', 'Electromagnetic Induction', 'Modern Physics'];
   const phyTopicRecords: Record<string, string> = {};
   for (const t of phyTopics) {
+    const topicId = deterministicUuid(`PHY-${t}`);
     const topic = await prisma.topic.upsert({
-      where: { id: crypto.createHash('md5').update(`PHY-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5') },
+      where: { id: topicId },
       update: {},
       create: {
-        id: crypto.createHash('md5').update(`PHY-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5'),
+        id: topicId,
         subjectId: phySubject.id,
         name: t,
       },
@@ -313,11 +351,12 @@ async function main() {
   const cheTopics = ['Atomic Structure', 'Periodic Table', 'Chemical Bonding', 'Stoichiometry', 'Chemical Equilibrium', 'Organic Chemistry', 'Redox Reactions', 'Chemical Kinetics', 'Solutions', 'States of Matter'];
   const cheTopicRecords: Record<string, string> = {};
   for (const t of cheTopics) {
+    const topicId = deterministicUuid(`CHE-${t}`);
     const topic = await prisma.topic.upsert({
-      where: { id: crypto.createHash('md5').update(`CHE-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5') },
+      where: { id: topicId },
       update: {},
       create: {
-        id: crypto.createHash('md5').update(`CHE-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5'),
+        id: topicId,
         subjectId: cheSubject.id,
         name: t,
       },
@@ -329,11 +368,12 @@ async function main() {
   const matTopics = ['Differential Calculus', 'Integral Calculus', 'Matrices', 'Combinatorics', 'Differential Equations', 'Sequences and Series', 'Conic Sections', 'Vectors', 'Probability', 'Limits', 'Complex Numbers'];
   const matTopicRecords: Record<string, string> = {};
   for (const t of matTopics) {
+    const topicId = deterministicUuid(`MAT-${t}`);
     const topic = await prisma.topic.upsert({
-      where: { id: crypto.createHash('md5').update(`MAT-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5') },
+      where: { id: topicId },
       update: {},
       create: {
-        id: crypto.createHash('md5').update(`MAT-${t}`).digest('hex').slice(0, 8).padEnd(36, '0').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5'),
+        id: topicId,
         subjectId: matSubject.id,
         name: t,
       },
