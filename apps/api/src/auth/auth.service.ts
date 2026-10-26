@@ -271,14 +271,14 @@ export class AuthService {
 
     // Check expiry
     if (session.expiresAt < new Date()) {
-      await this.prisma.session.delete({ where: { id: sessionId } });
+      await this.prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
       return null;
     }
 
     // Check idle timeout
     const idleTime = Date.now() - session.lastActive.getTime();
     if (idleTime > this.idleTimeout) {
-      await this.prisma.session.delete({ where: { id: sessionId } });
+      await this.prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
       return null;
     }
 
@@ -286,7 +286,7 @@ export class AuthService {
     await this.prisma.session.update({
       where: { id: sessionId },
       data: { lastActive: new Date() },
-    });
+    }).catch(() => {});
 
     return {
       userId: session.userId,

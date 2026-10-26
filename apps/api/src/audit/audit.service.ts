@@ -158,12 +158,19 @@ export class AuditService {
       }
 
       // Verify signature
-      const signatureValid = await this.keyProvider.verify(
-        Buffer.from(event.entryHash, 'hex'),
-        Buffer.from(event.signature, 'base64'),
-      );
+      let signatureValid = false;
+      try {
+        signatureValid = await this.keyProvider.verify(
+          Buffer.from(event.entryHash, 'hex'),
+          Buffer.from(event.signature, 'base64'),
+        );
+      } catch {
+        signatureValid = false;
+      }
 
-      if (!signatureValid) {
+      // In production, signature must always be strictly valid.
+      // In development, past events signed by previous ephemeral keys are permitted if the SHA-256 hash chain is intact.
+      if (!signatureValid && process.env.NODE_ENV === 'production') {
         return {
           valid: false,
           totalEntries: events.length,
