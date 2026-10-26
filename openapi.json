@@ -1,0 +1,457 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ExamVault API",
+    "description": "Secure Examination Paper Generation Framework — Step 1: Examiner Portal and Question Bank",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [
+    { "name": "Auth", "description": "Authentication, session management, and TOTP MFA" },
+    { "name": "Users", "description": "Institutional user and role administration (ADMIN only)" },
+    { "name": "Syllabus", "description": "Hierarchical syllabus management (Exam > Subject > Topic > Subtopic)" },
+    { "name": "Questions", "description": "Encrypted question authoring, versioning, and lifecycle management" },
+    { "name": "Audit", "description": "Tamper-evident append-only cryptographic audit chain" },
+    { "name": "Import", "description": "Bulk all-or-nothing question import from CSV" },
+    { "name": "Statistics", "description": "Non-leaking bank metadata analytics and distributions" },
+    { "name": "Health", "description": "Service liveness and readiness probe" }
+  ],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "examvault_session"
+      },
+      "csrf": {
+        "type": "apiKey",
+        "name": "X-CSRF-Token",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        },
+        "required": ["email", "password"]
+      },
+      "MfaVerifyDto": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "minLength": 6, "maxLength": 6 }
+        },
+        "required": ["token"]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["ADMIN", "EXAMINER", "REVIEWER", "AUDITOR"] },
+          "password": { "type": "string", "minLength": 12 }
+        },
+        "required": ["email", "name", "role", "password"]
+      },
+      "CreateExamDto": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "CreateSubjectDto": {
+        "type": "object",
+        "properties": {
+          "examId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "code": { "type": "string" }
+        },
+        "required": ["examId", "name", "code"]
+      },
+      "CreateTopicDto": {
+        "type": "object",
+        "properties": {
+          "subjectId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" }
+        },
+        "required": ["subjectId", "name"]
+      },
+      "CreateSubtopicDto": {
+        "type": "object",
+        "properties": {
+          "topicId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" }
+        },
+        "required": ["topicId", "name"]
+      },
+      "QuestionOption": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "text": { "type": "string" },
+          "imageId": { "type": "string", "format": "uuid" }
+        },
+        "required": ["label", "text"]
+      },
+      "QuestionContent": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["MCQ_SINGLE", "MCQ_MULTI", "INTEGER"] },
+          "stem": { "type": "string" },
+          "options": { "type": "array", "items": { "$ref": "#/components/schemas/QuestionOption" } },
+          "imageIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+          "solution": { "type": "string" },
+          "language": { "type": "string", "enum": ["EN", "HI", "BILINGUAL"] }
+        },
+        "required": ["type", "stem"]
+      },
+      "AnswerKey": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["MCQ_SINGLE", "MCQ_MULTI", "INTEGER"] },
+          "correct": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }, { "type": "number" }] },
+          "tolerance": { "type": "number" }
+        },
+        "required": ["type", "correct"]
+      },
+      "QuestionMetadata": {
+        "type": "object",
+        "properties": {
+          "subjectId": { "type": "string", "format": "uuid" },
+          "topicId": { "type": "string", "format": "uuid" },
+          "subtopicId": { "type": "string", "format": "uuid" },
+          "type": { "type": "string", "enum": ["MCQ_SINGLE", "MCQ_MULTI", "INTEGER"] },
+          "difficulty": { "type": "number", "minimum": 0, "maximum": 1 },
+          "cognitiveLevel": { "type": "string", "enum": ["REMEMBER", "UNDERSTAND", "APPLY", "ANALYZE", "EVALUATE", "CREATE"] },
+          "marks": { "type": "number" },
+          "negativeMarks": { "type": "number" },
+          "estimatedTimeSeconds": { "type": "integer" },
+          "language": { "type": "string", "enum": ["EN", "HI", "BILINGUAL"] }
+        },
+        "required": ["subjectId", "type", "difficulty", "cognitiveLevel", "marks", "estimatedTimeSeconds"]
+      },
+      "CreateQuestionInput": {
+        "type": "object",
+        "properties": {
+          "content": { "$ref": "#/components/schemas/QuestionContent" },
+          "answerKey": { "$ref": "#/components/schemas/AnswerKey" },
+          "metadata": { "$ref": "#/components/schemas/QuestionMetadata" }
+        },
+        "required": ["content", "answerKey", "metadata"]
+      },
+      "AuditVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "valid": { "type": "boolean" },
+          "totalEntries": { "type": "integer" },
+          "verifiedEntries": { "type": "integer" },
+          "firstBrokenEntry": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "index": { "type": "integer" },
+              "expectedHash": { "type": "string" },
+              "actualHash": { "type": "string" }
+            }
+          }
+        },
+        "required": ["valid", "totalEntries", "verifiedEntries"]
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginDto" } } }
+        },
+        "responses": {
+          "200": { "description": "Login successful, httpOnly session cookie set" },
+          "401": { "description": "Invalid credentials" },
+          "403": { "description": "Account locked after failed attempts" }
+        }
+      }
+    },
+    "/auth/mfa/setup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Setup TOTP MFA — returns QR code and manual secret",
+        "security": [{ "cookieAuth": [] }],
+        "responses": {
+          "200": { "description": "Returns qrCodeUrl and secret" }
+        }
+      }
+    },
+    "/auth/mfa/verify": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify 6-digit TOTP token",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MfaVerifyDto" } } }
+        },
+        "responses": {
+          "200": { "description": "MFA verified, session activated" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout — destroy session and clear cookie",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Logged out" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current authenticated user profile",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "User profile" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List users (ADMIN only)",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "List of institutional users" }, "403": { "description": "Forbidden" } }
+      },
+      "post": {
+        "tags": ["Users"],
+        "summary": "Create new user with specified role (ADMIN only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateUserDto" } } }
+        },
+        "responses": { "201": { "description": "User created" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/syllabus/exams": {
+      "get": {
+        "tags": ["Syllabus"],
+        "summary": "Get syllabus tree hierarchy",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Full syllabus tree" } }
+      },
+      "post": {
+        "tags": ["Syllabus"],
+        "summary": "Create new exam (ADMIN only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateExamDto" } } }
+        },
+        "responses": { "201": { "description": "Exam created" } }
+      }
+    },
+    "/syllabus/subjects": {
+      "get": {
+        "tags": ["Syllabus"],
+        "summary": "List subjects",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "List of subjects" } }
+      },
+      "post": {
+        "tags": ["Syllabus"],
+        "summary": "Create subject under an exam (ADMIN only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateSubjectDto" } } }
+        },
+        "responses": { "201": { "description": "Subject created" } }
+      }
+    },
+    "/syllabus/topics": {
+      "get": {
+        "tags": ["Syllabus"],
+        "summary": "List topics",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "List of topics" } }
+      },
+      "post": {
+        "tags": ["Syllabus"],
+        "summary": "Create topic under a subject (ADMIN only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTopicDto" } } }
+        },
+        "responses": { "201": { "description": "Topic created" } }
+      }
+    },
+    "/syllabus/subtopics": {
+      "get": {
+        "tags": ["Syllabus"],
+        "summary": "List subtopics",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "List of subtopics" } }
+      },
+      "post": {
+        "tags": ["Syllabus"],
+        "summary": "Create subtopic under a topic (ADMIN only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateSubtopicDto" } } }
+        },
+        "responses": { "201": { "description": "Subtopic created" } }
+      }
+    },
+    "/questions": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "List questions metadata (unencrypted metadata only, filtered by role)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "subjectId", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Paginated list of questions metadata" } }
+      },
+      "post": {
+        "tags": ["Questions"],
+        "summary": "Create a new question with envelope-encrypted content and answer (EXAMINER only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateQuestionInput" } } }
+        },
+        "responses": { "201": { "description": "Question created" } }
+      }
+    },
+    "/questions/{id}": {
+      "put": {
+        "tags": ["Questions"],
+        "summary": "Update question — creates new immutable version if current is SUBMITTED (EXAMINER only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateQuestionInput" } } }
+        },
+        "responses": { "200": { "description": "Question updated" } }
+      }
+    },
+    "/questions/{id}/content": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "Decrypt question content & answer key (Author or Reviewer only; ADMIN and AUDITOR get 403)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "version", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Decrypted question content and answer key" },
+          "403": { "description": "Forbidden for ADMIN, AUDITOR, or non-author examiners" }
+        }
+      }
+    },
+    "/questions/{id}/versions": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "Get immutable version history with cryptographic commitments",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Version list with commitments" } }
+      }
+    },
+    "/questions/{id}/submit": {
+      "patch": {
+        "tags": ["Questions"],
+        "summary": "Submit question — locks version into immutable state (EXAMINER only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Question submitted" } }
+      }
+    },
+    "/questions/{id}/withdraw": {
+      "patch": {
+        "tags": ["Questions"],
+        "summary": "Withdraw submitted question (EXAMINER only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Question withdrawn" } }
+      }
+    },
+    "/audit": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "List signed audit events (ADMIN and AUDITOR only)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "action", "in": "query", "schema": { "type": "string" } },
+          { "name": "actorId", "in": "query", "schema": { "type": "string" } },
+          { "name": "targetType", "in": "query", "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "string" } },
+          { "name": "to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "List of signed audit records" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/audit/verify": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "Verify audit chain cryptographic integrity (SHA-256 links and Ed25519 signatures)",
+        "security": [{ "cookieAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditVerifyResponse" } } }
+          }
+        }
+      }
+    },
+    "/import": {
+      "post": {
+        "tags": ["Import"],
+        "summary": "Bulk import questions from CSV with all-or-nothing validation (EXAMINER only)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "csv": { "type": "string" } }, "required": ["csv"] } } }
+        },
+        "responses": { "200": { "description": "Import result report" } }
+      }
+    },
+    "/import/template": {
+      "get": {
+        "tags": ["Import"],
+        "summary": "Download CSV import template",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "CSV template file attachment" } }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": ["Statistics"],
+        "summary": "Get aggregate bank metadata distributions (Zero content leak)",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Bank statistics" } }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check probe",
+        "responses": { "200": { "description": "Healthy" } }
+      }
+    }
+  }
+}
