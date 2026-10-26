@@ -18,7 +18,7 @@ export const StatsPage: React.FC = () => {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const res = await apiRequest<{ success: boolean; data: BankStats }>('/stats');
+        const res = await apiRequest<{ success: boolean; data: BankStats }>('/stats/bank');
         setStats(res.data);
       } catch (err) {
         console.error('Failed to load bank stats:', err);

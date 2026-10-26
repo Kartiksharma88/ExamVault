@@ -8,6 +8,14 @@ import { StatsService } from './stats.service';
 export class StatsController {
   constructor(private statsService: StatsService) {}
 
+  @Get()
+  @SkipCsrf()
+  @ApiOperation({ summary: 'Get question bank statistics (metadata only)' })
+  async getStatistics() {
+    const stats = await this.statsService.getBankStatistics();
+    return { success: true, data: stats };
+  }
+
   @Get('bank')
   @SkipCsrf()
   @ApiOperation({ summary: 'Get question bank statistics (metadata only)' })
