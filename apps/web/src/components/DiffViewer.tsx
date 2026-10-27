@@ -17,14 +17,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const lineDiffs = diff.diffLines(oldText || '', newText || '');
 
   return (
-    <div className="rounded-lg border border-border bg-[#0d131f] overflow-hidden text-sm font-mono">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-border text-xs text-text-secondary">
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden text-xs font-mono shadow-xs">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span>
           <span>{oldLabel} (Deletions)</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block"></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>
           <span>{newLabel} (Additions)</span>
         </div>
       </div>
@@ -33,18 +33,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           const isAdded = part.added;
           const isRemoved = part.removed;
 
-          let bgClass = 'text-slate-300';
+          let bgClass = 'text-slate-800';
           let prefix = '  ';
           if (isAdded) {
-            bgClass = 'bg-emerald-950/40 text-emerald-300 border-l-2 border-emerald-500 pl-2';
+            bgClass = 'bg-emerald-50 text-emerald-800 border-l-2 border-emerald-600 pl-2 font-medium';
             prefix = '+ ';
           } else if (isRemoved) {
-            bgClass = 'bg-rose-950/40 text-rose-300 border-l-2 border-rose-500 pl-2 line-through';
+            bgClass = 'bg-red-50 text-red-800 border-l-2 border-red-600 pl-2 line-through font-medium';
             prefix = '- ';
           }
 
           return (
-            <div key={index} className={`py-0.5 whitespace-pre-wrap ${bgClass}`}>
+            <div key={index} className={`py-1 whitespace-pre-wrap ${bgClass}`}>
               <span className="opacity-50 select-none">{prefix}</span>
               {part.value}
             </div>

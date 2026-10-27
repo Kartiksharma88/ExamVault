@@ -13,6 +13,7 @@ import {
   Sparkles,
   ChevronRight,
   Send,
+  MessageSquare,
 } from 'lucide-react';
 
 interface QuestionItem {
@@ -47,12 +48,14 @@ interface ExaminerDashboardProps {
   onEditQuestion: (questionId: string) => void;
   onCreateNew: () => void;
   onViewHistory: (questionId: string) => void;
+  onViewFeedback?: (questionId: string) => void;
 }
 
 export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
   onEditQuestion,
   onCreateNew,
   onViewHistory,
+  onViewFeedback,
 }) => {
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +88,7 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
 
   const handleSubmitQuestion = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to submit this question? Once submitted, it cannot be modified directly (a new version will be created).')) {
+    if (!confirm('Are you sure you want to submit this question? Once submitted, it becomes immutable and ready for review.')) {
       return;
     }
     setActionLoading(id);
@@ -135,22 +138,24 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Welcome & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
-            <span>Authoring Portal & Question Bank</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Authoring Portal & Question Bank
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-mono font-medium">
               AES-256-GCM
             </span>
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
             Questions are end-to-end envelope-encrypted with dedicated keys per version and audited.
           </p>
         </div>
 
         <button
           onClick={onCreateNew}
-          className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl font-medium text-sm text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-glow-sm transition-all"
+          className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-sm hover:shadow transition-all"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Author New Question</span>
@@ -159,63 +164,63 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="glass-card rounded-xl p-4 border border-border">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-text-secondary uppercase">Total Authored</span>
-            <FileText className="w-4 h-4 text-blue-400" />
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Authored</span>
+            <FileText className="w-4 h-4 text-slate-700" />
           </div>
-          <div className="text-2xl font-bold text-white mt-2">{questions.length}</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2">{questions.length}</div>
         </div>
 
-        <div className="glass-card rounded-xl p-4 border border-border">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-400 uppercase">Drafts</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Drafts</span>
+            <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="text-2xl font-bold text-amber-400 mt-2">{draftCount}</div>
+          <div className="text-2xl font-bold text-amber-600 mt-2">{draftCount}</div>
         </div>
 
-        <div className="glass-card rounded-xl p-4 border border-border">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-400 uppercase">Submitted</span>
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Submitted / Ready</span>
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-bold text-emerald-400 mt-2">{submittedCount}</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-2">{submittedCount}</div>
         </div>
 
-        <div className="glass-card rounded-xl p-4 border border-border">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400 uppercase">Withdrawn</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Withdrawn</span>
             <RotateCcw className="w-4 h-4 text-slate-400" />
           </div>
-          <div className="text-2xl font-bold text-slate-400 mt-2">{withdrawnCount}</div>
+          <div className="text-2xl font-bold text-slate-500 mt-2">{withdrawnCount}</div>
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="glass-card rounded-xl p-4 border border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by ID (e.g. EV-PHY-000001), type, or Bloom level..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-border rounded-lg text-sm text-white placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
           />
         </div>
 
         <div className="flex items-center space-x-2">
-          <Filter className="w-4 h-4 text-text-muted" />
-          <span className="text-xs text-text-secondary">Status:</span>
+          <Filter className="w-4 h-4 text-slate-400" />
+          <span className="text-xs text-slate-500 font-medium">Status:</span>
           {(['ALL', 'DRAFT', 'SUBMITTED', 'WITHDRAWN'] as const).map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 statusFilter === st
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-900 text-text-secondary hover:text-white hover:bg-slate-800'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
               }`}
             >
               {st}
@@ -226,22 +231,24 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
 
       {/* Question List */}
       {loading ? (
-        <div className="text-center py-16">
-          <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <p className="text-sm text-text-secondary">Retrieving encrypted question bank metadata...</p>
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+          <div className="inline-block w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className="text-sm text-slate-500">Retrieving encrypted question bank metadata...</p>
         </div>
       ) : filteredQuestions.length === 0 ? (
-        <div className="glass-card rounded-2xl p-12 text-center border border-dashed border-border/80">
-          <Sparkles className="w-10 h-10 text-cyan-400 mx-auto mb-3 opacity-60" />
-          <h3 className="text-base font-medium text-white">No questions found</h3>
-          <p className="text-sm text-text-muted mt-1 max-w-sm mx-auto">
+        <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-slate-300 shadow-xs">
+          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Sparkles className="w-6 h-6 text-red-600" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">No questions found</h3>
+          <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
             {searchQuery
               ? 'Try modifying your search keywords or filter criteria.'
               : 'You have not authored any questions yet. Start authoring your first encrypted question.'}
           </p>
           <button
             onClick={onCreateNew}
-            className="mt-5 inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            className="mt-5 inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Create First Question</span>
@@ -257,52 +264,54 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
               <div
                 key={q.id}
                 onClick={() => onEditQuestion(q.id)}
-                className="glass-card rounded-xl p-4 border border-border glass-card-hover cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="bg-white rounded-xl p-4 border border-slate-200 hover:border-slate-300 hover:shadow-md cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
               >
                 {/* Left meta info */}
                 <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-cyan-300">{q.humanId}</span>
+                    <span className="font-mono text-sm font-bold text-slate-900 group-hover:text-red-600 transition-colors">
+                      {q.humanId}
+                    </span>
                     <span
                       className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                         isDraft
-                          ? 'bg-amber-950/60 text-amber-300 border border-amber-800/80'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
                           : isSubmitted
-                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/80'
-                          : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}
                     >
                       {q.status}
                     </span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-text-secondary border border-border">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
                       {q.metadata?.type || q.type}
                     </span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-blue-950/40 text-blue-300 border border-blue-900/40">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200">
                       v{q.currentVersion}
                     </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-purple-950/40 text-purple-300 border border-purple-900/40">
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
                       Bloom: {q.metadata?.cognitiveLevel || q.cognitiveLevel}
                     </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-950/40 text-indigo-300 border border-indigo-900/40">
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
                       {q.metadata?.language || q.language}
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                     <span>
                       Difficulty:{' '}
-                      <strong className="text-text-secondary font-mono">
+                      <strong className="text-slate-800 font-mono">
                         {(q.metadata?.difficulty ?? q.difficulty ?? 0.5).toFixed(2)}
                       </strong>
                     </span>
                     <span>
                       Marks:{' '}
-                      <strong className="text-emerald-400 font-mono">+{(q.metadata?.marks ?? q.marks ?? 1)}</strong> /{' '}
-                      <strong className="text-rose-400 font-mono">-{(q.metadata?.negativeMarks ?? q.negativeMarks ?? 0)}</strong>
+                      <strong className="text-emerald-700 font-mono">+{(q.metadata?.marks ?? q.marks ?? 1)}</strong> /{' '}
+                      <strong className="text-red-600 font-mono">-{(q.metadata?.negativeMarks ?? q.negativeMarks ?? 0)}</strong>
                     </span>
                     <span>
                       Est. Time:{' '}
-                      <strong className="text-text-secondary font-mono">
+                      <strong className="text-slate-800 font-mono">
                         {Math.round((q.metadata?.estimatedTimeSeconds ?? q.estimatedTime ?? 120) / 60)} min
                       </strong>
                     </span>
@@ -311,7 +320,7 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                 </div>
 
                 {/* Right actions */}
-                <div className="flex items-center space-x-2 pt-2 md:pt-0 border-t md:border-t-0 border-border/60">
+                <div className="flex items-center space-x-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -319,10 +328,23 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                       onViewHistory(q.id);
                     }}
                     title="View Version History & Cryptographic Commitment"
-                    className="p-2 rounded-lg text-text-secondary hover:text-cyan-400 hover:bg-slate-800 border border-border transition-colors text-xs flex items-center space-x-1"
+                    className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 transition-colors text-xs flex items-center space-x-1"
                   >
                     <History className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Versions</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewFeedback?.(q.id);
+                    }}
+                    title="View Peer Review Feedback"
+                    className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 transition-colors text-xs flex items-center space-x-1"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="hidden sm:inline">Feedback</span>
                   </button>
 
                   {isDraft && (
@@ -331,7 +353,7 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                       disabled={actionLoading === q.id}
                       onClick={(e) => handleSubmitQuestion(q.id, e)}
                       title="Submit Question (Makes version immutable)"
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-600/40 transition-colors flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors flex items-center space-x-1"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Submit</span>
@@ -344,14 +366,14 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                       disabled={actionLoading === q.id}
                       onClick={(e) => handleWithdrawQuestion(q.id, e)}
                       title="Withdraw Question"
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 border border-rose-800/60 transition-colors flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-red-50 text-red-700 border border-red-200 transition-colors flex items-center space-x-1"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       <span>Withdraw</span>
                     </button>
                   )}
 
-                  <div className="text-text-muted hover:text-white p-1">
+                  <div className="text-slate-400 group-hover:text-slate-700 p-1">
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>

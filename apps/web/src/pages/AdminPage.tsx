@@ -194,24 +194,26 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center space-x-2">
-            <span>Administration & Governance</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800">
-              Admin Role
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Administration & Governance
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200 font-semibold">
+              Admin Access
             </span>
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
             Manage institutional users, roles, and syllabus trees. (Admin has zero access to question ciphertexts).
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-900 p-1 rounded-xl border border-border">
+        <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${
-              activeTab === 'users' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-white'
+            className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'users' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -219,8 +221,8 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
           </button>
           <button
             onClick={() => setActiveTab('syllabus')}
-            className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${
-              activeTab === 'syllabus' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-white'
+            className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'syllabus' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <BookOpen className="w-4 h-4" />
@@ -233,14 +235,14 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
         <div
           className={`p-4 rounded-xl border flex items-center space-x-3 text-sm ${
             userMsg.type === 'success'
-              ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-800 text-rose-300'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-red-50 border-red-200 text-red-900'
           }`}
         >
           {userMsg.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
           ) : (
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600" />
           )}
           <span>{userMsg.text}</span>
         </div>
@@ -248,12 +250,12 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
       {/* Users Tab */}
       {activeTab === 'users' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">System Users & Roles</h2>
+            <h2 className="text-base font-bold text-slate-900">Institutional Users & Access Directory</h2>
             <button
               onClick={() => setShowCreateUser(true)}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-glow-sm transition-all"
+              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
             >
               <UserPlus className="w-4 h-4" />
               <span>Enroll New User</span>
@@ -262,40 +264,40 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
           {/* Create User Modal */}
           {showCreateUser && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <div className="glass-card rounded-2xl w-full max-w-md p-6 border border-border shadow-2xl">
-                <h3 className="text-base font-semibold text-white mb-4">Enroll New User</h3>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+              <div className="bg-white rounded-2xl w-full max-w-md p-6 border border-slate-200 shadow-2xl">
+                <h3 className="text-base font-bold text-slate-900 mb-4">Enroll New User</h3>
                 <form onSubmit={handleCreateUser} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-text-secondary mb-1">Full Name *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
                     <input
                       type="text"
                       required
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       placeholder="Prof. Jane Doe"
-                      className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-text-secondary mb-1">Email *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email *</label>
                     <input
                       type="email"
                       required
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       placeholder="jane.doe@examvault.local"
-                      className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-text-secondary mb-1">Role *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Role *</label>
                     <select
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value as any)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
                     >
                       <option value="EXAMINER">EXAMINER (Author questions)</option>
                       <option value="ADMIN">ADMIN (Manage syllabus & users)</option>
@@ -305,7 +307,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-text-secondary mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Temporary Password (Min 12 chars) *
                     </label>
                     <input
@@ -313,24 +315,24 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-cyan-300 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-mono font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
                     />
-                    <p className="text-[11px] text-text-muted mt-1">
+                    <p className="text-[11px] text-slate-500 mt-1">
                       Must contain uppercase, lowercase, digit, and special symbol.
                     </p>
                   </div>
 
-                  <div className="flex justify-end space-x-2 pt-3 border-t border-border">
+                  <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={() => setShowCreateUser(false)}
-                      className="px-4 py-2 rounded-xl text-xs font-medium bg-slate-800 text-text-secondary hover:text-white"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs"
                     >
                       Create User
                     </button>
@@ -341,46 +343,48 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
           )}
 
           {/* User List Table */}
-          <div className="glass-card rounded-2xl border border-border overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900/80 border-b border-border text-text-secondary uppercase">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
                 <tr>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Email</th>
-                  <th className="px-5 py-3">Role</th>
-                  <th className="px-5 py-3">MFA Status</th>
-                  <th className="px-5 py-3">Enrolled</th>
+                  <th className="px-5 py-3.5">Name</th>
+                  <th className="px-5 py-3.5">Email</th>
+                  <th className="px-5 py-3.5">Role</th>
+                  <th className="px-5 py-3.5">MFA Status</th>
+                  <th className="px-5 py-3.5">Enrolled</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60">
+              <tbody className="divide-y divide-slate-100">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-900/40">
-                    <td className="px-5 py-3 font-medium text-white">{u.name}</td>
-                    <td className="px-5 py-3 font-mono text-text-secondary">{u.email}</td>
-                    <td className="px-5 py-3">
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-5 py-3.5 font-bold text-slate-900">{u.name}</td>
+                    <td className="px-5 py-3.5 font-mono text-slate-600">{u.email}</td>
+                    <td className="px-5 py-3.5">
                       <span
                         className={`font-semibold px-2 py-0.5 rounded text-[10px] ${
                           u.role === 'ADMIN'
-                            ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                            ? 'bg-slate-100 text-slate-800 border border-slate-200'
                             : u.role === 'AUDITOR'
-                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                            : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
                         }`}
                       >
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3.5">
                       {u.mfaEnabled ? (
-                        <span className="text-emerald-400 font-mono flex items-center space-x-1">
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-mono text-[11px] font-medium inline-flex items-center space-x-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Active</span>
                         </span>
                       ) : (
-                        <span className="text-amber-400 font-mono">Enrolling at first login</span>
+                        <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono text-[11px] font-medium">
+                          Enrolling at first login
+                        </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-text-muted">{formatDate(u.createdAt)}</td>
+                    <td className="px-5 py-3.5 text-slate-500">{formatDate(u.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -391,12 +395,12 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
       {/* Syllabus Tab */}
       {activeTab === 'syllabus' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">Syllabus Taxonomy Tree</h2>
+            <h2 className="text-base font-bold text-slate-900">Syllabus Taxonomy Tree</h2>
             <button
               onClick={() => setShowAddExam(true)}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-glow-sm transition-all"
+              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Add Exam</span>
@@ -405,8 +409,8 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
           {/* Add Exam Form */}
           {showAddExam && (
-            <form onSubmit={handleCreateExam} className="glass-card rounded-xl p-4 border border-blue-500/40 space-y-3">
-              <h3 className="text-xs font-semibold text-white uppercase">New Examination Program</h3>
+            <form onSubmit={handleCreateExam} className="bg-white rounded-xl p-4 border border-red-300 shadow-xs space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">New Examination Program</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
@@ -414,25 +418,25 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                   placeholder="Exam Name (e.g., JEE Advanced 2026)"
                   value={newExamName}
                   onChange={(e) => setNewExamName(e.target.value)}
-                  className="px-3 py-2 bg-slate-900 border border-border rounded-lg text-xs text-white"
+                  className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-red-600"
                 />
                 <input
                   type="text"
                   placeholder="Description (Optional)"
                   value={newExamDesc}
                   onChange={(e) => setNewExamDesc(e.target.value)}
-                  className="px-3 py-2 bg-slate-900 border border-border rounded-lg text-xs text-white"
+                  className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-red-600"
                 />
               </div>
               <div className="flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setShowAddExam(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs bg-slate-800 text-text-secondary"
+                  className="px-3 py-1.5 rounded-lg text-xs bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white">
+                <button type="submit" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white">
                   Save Exam
                 </button>
               </div>
@@ -442,20 +446,20 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
           {/* Exam Hierarchy */}
           <div className="space-y-4">
             {exams.map((exam) => (
-              <div key={exam.id} className="glass-card rounded-2xl p-5 border border-border space-y-4">
-                <div className="flex items-center justify-between border-b border-border pb-3">
-                  <div className="flex items-center space-x-2">
-                    <FolderTree className="w-5 h-5 text-cyan-400" />
+              <div key={exam.id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <FolderTree className="w-5 h-5 text-red-600" />
                     <div>
-                      <h3 className="font-bold text-white text-base">{exam.name}</h3>
-                      {exam.description && <p className="text-xs text-text-muted">{exam.description}</p>}
+                      <h3 className="font-bold text-slate-900 text-base">{exam.name}</h3>
+                      {exam.description && <p className="text-xs text-slate-500">{exam.description}</p>}
                     </div>
                   </div>
                   <button
                     onClick={() => setShowAddSubject(exam.id)}
-                    className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-border"
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200"
                   >
-                    <PlusCircle className="w-3.5 h-3.5" />
+                    <PlusCircle className="w-3.5 h-3.5 text-red-600" />
                     <span>Add Subject</span>
                   </button>
                 </div>
@@ -464,16 +468,16 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                 {showAddSubject === exam.id && (
                   <form
                     onSubmit={(e) => handleCreateSubject(exam.id, e)}
-                    className="p-3 bg-slate-900/90 rounded-xl border border-border space-y-2"
+                    className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3"
                   >
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <input
                         type="text"
                         required
                         placeholder="Subject Name (e.g. Physics)"
                         value={newSubjectName}
                         onChange={(e) => setNewSubjectName(e.target.value)}
-                        className="px-3 py-1.5 bg-slate-950 border border-border rounded-lg text-xs text-white"
+                        className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600"
                       />
                       <input
                         type="text"
@@ -481,18 +485,18 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                         placeholder="Subject Code (e.g. PHY)"
                         value={newSubjectCode}
                         onChange={(e) => setNewSubjectCode(e.target.value)}
-                        className="px-3 py-1.5 bg-slate-950 border border-border rounded-lg text-xs text-white uppercase font-mono"
+                        className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 uppercase font-mono focus:outline-none focus:ring-1 focus:ring-red-600"
                       />
                     </div>
                     <div className="flex justify-end space-x-2">
                       <button
                         type="button"
                         onClick={() => setShowAddSubject(null)}
-                        className="px-2.5 py-1 text-xs text-text-muted"
+                        className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900"
                       >
                         Cancel
                       </button>
-                      <button type="submit" className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg">
+                      <button type="submit" className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg">
                         Create Subject
                       </button>
                     </div>
@@ -502,17 +506,17 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                 {/* Subjects Grid */}
                 <div className="space-y-3">
                   {exam.subjects.map((sub) => (
-                    <div key={sub.id} className="p-4 rounded-xl bg-slate-900/60 border border-border space-y-3">
+                    <div key={sub.id} className="p-4 rounded-xl bg-slate-50/80 border border-slate-200 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-900 text-white">
                             {sub.code}
                           </span>
-                          <span className="font-semibold text-white text-sm">{sub.name}</span>
+                          <span className="font-bold text-slate-900 text-sm">{sub.name}</span>
                         </div>
                         <button
                           onClick={() => setShowAddTopic(sub.id)}
-                          className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+                          className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center space-x-1"
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
                           <span>Add Topic</span>
@@ -531,30 +535,30 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                             placeholder="Topic Name (e.g. Thermodynamics)"
                             value={newTopicName}
                             onChange={(e) => setNewTopicName(e.target.value)}
-                            className="flex-1 px-3 py-1.5 bg-slate-950 border border-border rounded-lg text-xs text-white"
+                            className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600"
                           />
                           <button
                             type="button"
                             onClick={() => setShowAddTopic(null)}
-                            className="px-2 py-1 text-xs text-text-muted"
+                            className="px-2.5 py-1 text-xs text-slate-500"
                           >
                             Cancel
                           </button>
-                          <button type="submit" className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg">
+                          <button type="submit" className="px-3 py-1 text-xs font-semibold bg-red-600 text-white rounded-lg">
                             Add
                           </button>
                         </form>
                       )}
 
                       {/* Topics List */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
                         {sub.topics.map((t) => (
-                          <div key={t.id} className="p-2.5 rounded-lg bg-slate-950/80 border border-border/80">
+                          <div key={t.id} className="p-3 rounded-lg bg-white border border-slate-200 shadow-2xs">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-cyan-300">{t.name}</span>
+                              <span className="text-xs font-bold text-slate-900">{t.name}</span>
                               <button
                                 onClick={() => setShowAddSubtopic(t.id)}
-                                className="text-[11px] text-text-muted hover:text-white"
+                                className="text-[11px] text-red-600 hover:text-red-700 font-medium"
                               >
                                 + Subtopic
                               </button>
@@ -572,16 +576,16 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                                   placeholder="Subtopic Name (e.g. Carnot Cycle)"
                                   value={newSubtopicName}
                                   onChange={(e) => setNewSubtopicName(e.target.value)}
-                                  className="flex-1 px-2 py-1 bg-slate-900 border border-border rounded text-[11px] text-white"
+                                  className="flex-1 px-2.5 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => setShowAddSubtopic(null)}
-                                  className="text-[10px] text-text-muted"
+                                  className="text-[10px] text-slate-500"
                                 >
                                   Cancel
                                 </button>
-                                <button type="submit" className="px-2 py-1 text-[10px] bg-blue-600 text-white rounded">
+                                <button type="submit" className="px-2 py-1 text-[10px] font-semibold bg-red-600 text-white rounded">
                                   Add
                                 </button>
                               </form>
@@ -593,7 +597,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                                 {t.subtopics.map((st) => (
                                   <span
                                     key={st.id}
-                                    className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-text-muted border border-border"
+                                    className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200"
                                   >
                                     {st.name}
                                   </span>

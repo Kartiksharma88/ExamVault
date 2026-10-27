@@ -6,6 +6,7 @@ import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CryptoService } from '../crypto/crypto.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private prisma: PrismaService,
     private config: ConfigService,
     private audit: AuditService,
+    private crypto: CryptoService,
   ) {
     this.sessionMaxAge = parseInt(this.config.get('SESSION_MAX_AGE_MS') || '3600000', 10);
     this.idleTimeout = 15 * 60 * 1000; // 15 minutes
@@ -236,6 +238,9 @@ export class AuthService {
       });
     }
 
+    // Ensure user has an Ed25519 signing key pair created and wrapped at MFA enrolment
+    await this.ensureUserSigningKey(user.id);
+
     // Mark session as MFA verified
     await this.prisma.session.update({
       where: { id: sessionId },
@@ -250,6 +255,73 @@ export class AuthService {
     });
 
     return { verified: true };
+  }
+
+  /**
+   * Ensure user has an Ed25519 digital signing keypair created at MFA enrolment
+   */
+  async ensureUserSigningKey(userId: string) {
+    const existing = await this.prisma.userSigningKey.findUnique({
+      where: { userId },
+    });
+    if (existing) return existing;
+
+    const keyData = await this.crypto.generateUserSigningKey();
+    return this.prisma.userSigningKey.create({
+      data: {
+        userId,
+        publicKey: keyData.publicKey,
+        wrappedPrivateKey: keyData.wrappedPrivateKey,
+        keyId: keyData.keyId,
+      },
+    });
+  }
+
+  /**
+   * Fresh step-up MFA verification required at the moment of approval signing
+   */
+  async verifyStepUpTotp(userId: string, token: string): Promise<boolean> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.mfaSecret) {
+      await this.audit.log({
+        actorId: userId,
+        action: 'STEP_UP_MFA_FAILURE',
+        targetType: 'user',
+        targetId: userId,
+        metadata: { reason: 'mfa_not_configured' },
+      });
+      throw new BadRequestException('MFA is not configured for this account');
+    }
+
+    const totp = new OTPAuth.TOTP({
+      issuer: 'ExamVault',
+      label: user.email,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(user.mfaSecret),
+    });
+
+    const delta = totp.validate({ token, window: 1 });
+    if (delta === null) {
+      await this.audit.log({
+        actorId: userId,
+        action: 'STEP_UP_MFA_FAILURE',
+        targetType: 'user',
+        targetId: userId,
+        metadata: { reason: 'invalid_step_up_token' },
+      });
+      throw new UnauthorizedException('Invalid step-up MFA verification code');
+    }
+
+    await this.audit.log({
+      actorId: userId,
+      action: 'STEP_UP_MFA_SUCCESS',
+      targetType: 'user',
+      targetId: userId,
+    });
+
+    return true;
   }
 
   /**

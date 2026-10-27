@@ -8,6 +8,8 @@ import sanitizeHtml from 'sanitize-html';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { AuditService } from '../audit/audit.service';
+import { ScreeningQueue } from '../originality/screening.queue';
+import { CreateNewVersionInput } from '@examvault/shared';
 
 interface QuestionContent {
   type: string;
@@ -48,6 +50,7 @@ export class QuestionsService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private audit: AuditService,
+    private screeningQueue: ScreeningQueue,
   ) {}
 
   /**
@@ -302,7 +305,7 @@ export class QuestionsService {
   }
 
   /**
-   * Submit a question (DRAFT -> SUBMITTED)
+   * Submit a question (DRAFT -> SUBMITTED -> SCREENING via background job)
    */
   async submit(questionId: string, userId: string) {
     const question = await this.prisma.question.findUniqueOrThrow({
@@ -334,11 +337,14 @@ export class QuestionsService {
       metadata: { versionNo: currentVersion.versionNo },
     });
 
+    // Automatically trigger originality screening job
+    await this.screeningQueue.enqueue(currentVersion.id);
+
     return { id: questionId, status: 'SUBMITTED' };
   }
 
   /**
-   * Withdraw a question (SUBMITTED -> WITHDRAWN)
+   * Withdraw a question (SUBMITTED/READY_FOR_REVIEW -> WITHDRAWN before reviews start)
    */
   async withdraw(questionId: string, userId: string) {
     const question = await this.prisma.question.findUniqueOrThrow({
@@ -353,8 +359,10 @@ export class QuestionsService {
     }
 
     const currentVersion = question.versions[0];
-    if (currentVersion.status !== 'SUBMITTED') {
-      throw new BadRequestException('Only SUBMITTED questions can be withdrawn');
+    if (!['SUBMITTED', 'READY_FOR_REVIEW'].includes(currentVersion.status)) {
+      throw new BadRequestException(
+        'Only SUBMITTED or READY_FOR_REVIEW questions can be withdrawn before reviewer assignment',
+      );
     }
 
     await this.prisma.questionVersion.update({
@@ -374,7 +382,7 @@ export class QuestionsService {
   }
 
   /**
-   * Get question content (decrypted) — enforces role-based access
+   * Get question content (decrypted) — enforces strict role-based access & blind solve barrier
    * ADMIN and AUDITOR MUST NOT access content
    */
   async getContent(
@@ -411,14 +419,6 @@ export class QuestionsService {
       throw new ForbiddenException('You can only view your own questions');
     }
 
-    // REVIEWER can read SUBMITTED questions not authored by them (Step 2 stub)
-    if (userRole === 'REVIEWER') {
-      if (question.authorId === userId) {
-        throw new ForbiddenException('Reviewers cannot review their own questions');
-      }
-      // TODO: Step 2 — check that question is in SUBMITTED/UNDER_REVIEW status
-    }
-
     const targetVersion = versionNo || question.currentVersion;
     const version = await this.prisma.questionVersion.findUnique({
       where: {
@@ -428,6 +428,48 @@ export class QuestionsService {
 
     if (!version) {
       throw new NotFoundException(`Version ${targetVersion} not found`);
+    }
+
+    // REVIEWER: Can only read question versions currently assigned to them
+    let isReviewerInSolvePhase = false;
+    if (userRole === 'REVIEWER') {
+      if (question.authorId === userId) {
+        throw new ForbiddenException('Reviewers cannot review their own questions');
+      }
+
+      const assignment = await this.prisma.reviewAssignment.findFirst({
+        where: {
+          questionVersionId: version.id,
+          reviewerId: userId,
+          status: { in: ['PENDING', 'SOLVED', 'COMPLETED'] },
+        },
+        include: { review: true },
+      });
+
+      if (!assignment) {
+        await this.audit.log({
+          actorId: userId,
+          action: 'ACCESS_DENIED',
+          targetType: 'question_version',
+          targetId: version.id,
+          metadata: { reason: 'not_assigned_to_reviewer' },
+        });
+        throw new ForbiddenException('Reviewers can only read question versions currently assigned to them');
+      }
+
+      // Check if in blind solve phase
+      if (!assignment.review || assignment.review.phase === 'SOLVE') {
+        isReviewerInSolvePhase = true;
+      }
+    }
+
+    // MODERATOR: Can only read versions in MODERATION stage or under DUPLICATE_FLAGGED
+    if (userRole === 'MODERATOR') {
+      if (!['MODERATION', 'DUPLICATE_FLAGGED'].includes(version.status)) {
+        throw new ForbiddenException(
+          'Moderators can only read question versions in moderation stage or under a duplicate flag',
+        );
+      }
     }
 
     const associatedData = `${questionId}:${targetVersion}`;
@@ -444,23 +486,29 @@ export class QuestionsService {
       associatedData,
     );
 
-    // Decrypt answer key
-    const answerJson = await this.crypto.decrypt(
-      {
-        ciphertext: version.encryptedAnswer,
-        nonce: version.answerNonce,
-        tag: version.answerTag,
-        wrappedKey: version.encryptedAnswerKey,
-        keyId: version.keyId,
-      },
-      associatedData,
-    );
-
     const content = JSON.parse(contentJson);
-    const answerKey = JSON.parse(answerJson);
-
-    // Remove internal salt from response
     delete content._commitmentSalt;
+
+    let answerKey: any = null;
+
+    // BLIND SOLVE BARRIER:
+    // If reviewer is in SOLVE phase, withhold answerKey and solution!
+    if (isReviewerInSolvePhase) {
+      delete content.solution;
+    } else {
+      // Decrypt answer key
+      const answerJson = await this.crypto.decrypt(
+        {
+          ciphertext: version.encryptedAnswer,
+          nonce: version.answerNonce,
+          tag: version.answerTag,
+          wrappedKey: version.encryptedAnswerKey,
+          keyId: version.keyId,
+        },
+        associatedData,
+      );
+      answerKey = JSON.parse(answerJson);
+    }
 
     // Log content access
     await this.audit.log({
@@ -491,6 +539,202 @@ export class QuestionsService {
         estimatedTimeSeconds: question.estimatedTime,
         language: question.language,
       },
+    };
+  }
+
+  /**
+   * Get anonymized reviewer and moderator feedback for the author
+   * Anonymity guarantee: Reviewer names/IDs are NEVER leaked (Reviewer A, Reviewer B, Moderator)
+   */
+  async getAuthorFeedback(questionId: string, userId: string) {
+    const question = await this.prisma.question.findUniqueOrThrow({
+      where: { id: questionId },
+      include: {
+        versions: {
+          orderBy: { versionNo: 'desc' },
+          include: {
+            reviews: {
+              where: { phase: 'SUBMITTED' },
+            },
+            approvals: true,
+          },
+        },
+      },
+    });
+
+    if (question.authorId !== userId) {
+      throw new ForbiddenException('You can only view feedback for your own questions');
+    }
+
+    const feedbackList = [];
+    const reviewerLabels = ['Reviewer A', 'Reviewer B', 'Reviewer C', 'Reviewer D'];
+
+    for (const v of question.versions) {
+      let labelIdx = 0;
+      const anonMap: Record<string, string> = {};
+
+      for (const rev of v.reviews) {
+        if (!anonMap[rev.reviewerId]) {
+          anonMap[rev.reviewerId] = reviewerLabels[labelIdx++ % reviewerLabels.length];
+        }
+        const anonRole = anonMap[rev.reviewerId];
+
+        let commentsText = '';
+        if (
+          rev.encryptedComments &&
+          rev.commentsNonce &&
+          rev.commentsTag &&
+          rev.encryptedCommentsKey &&
+          rev.keyId
+        ) {
+          try {
+            commentsText = await this.crypto.decrypt(
+              {
+                ciphertext: rev.encryptedComments,
+                nonce: rev.commentsNonce,
+                tag: rev.commentsTag,
+                wrappedKey: rev.encryptedCommentsKey,
+                keyId: rev.keyId,
+              },
+              `${rev.id}:${questionId}:${v.versionNo}`,
+            );
+          } catch {
+            commentsText = '[Unable to decrypt review comment]';
+          }
+        }
+
+        feedbackList.push({
+          versionNo: v.versionNo,
+          role: anonRole,
+          decision: rev.decision,
+          checklist: rev.checklist,
+          comments: commentsText,
+          submittedAt: rev.submittedAt,
+        });
+      }
+
+      // Add moderator approval/rejection feedback
+      for (const app of v.approvals) {
+        if (app.role === 'MODERATOR') {
+          feedbackList.push({
+            versionNo: v.versionNo,
+            role: 'Moderator',
+            decision: app.decision,
+            checklist: null,
+            comments: `Moderator decision: ${app.decision}`,
+            submittedAt: app.timestamp,
+          });
+        }
+      }
+    }
+
+    return feedbackList;
+  }
+
+  /**
+   * Create a new version for an APPROVED, CHANGES_REQUESTED, or REJECTED question
+   * Enforces mandatory change justification (min 15 characters) and full review pipeline
+   */
+  async createNewVersion(input: CreateNewVersionInput, userId: string) {
+    const parentVersion = await this.prisma.questionVersion.findUniqueOrThrow({
+      where: { id: input.parentVersionId },
+      include: { question: true },
+    });
+
+    if (parentVersion.authorId !== userId) {
+      throw new ForbiddenException('You can only create revisions of your own questions');
+    }
+
+    if (!['CHANGES_REQUESTED', 'APPROVED', 'REJECTED'].includes(parentVersion.status)) {
+      throw new BadRequestException(
+        'Revisions can only be created from questions with status CHANGES_REQUESTED, APPROVED, or REJECTED',
+      );
+    }
+
+    if (!input.changeJustification || input.changeJustification.trim().length < 15) {
+      throw new BadRequestException(
+        'A comprehensive change justification of at least 15 characters is required for revisions.',
+      );
+    }
+
+    const { content, answerKey, metadata } = input;
+    const sanitizedContent = this.sanitizeContent(content);
+
+    const newVersionNo = parentVersion.question.currentVersion + 1;
+    const associatedData = `${parentVersion.questionId}:${newVersionNo}`;
+
+    // Compute commitment
+    const canonicalContent = JSON.stringify(sanitizedContent);
+    const { commitment, salt } = this.crypto.computeCommitment(canonicalContent);
+    sanitizedContent._commitmentSalt = salt;
+
+    // Encrypt content
+    const encryptedContent = await this.crypto.encrypt(
+      JSON.stringify(sanitizedContent),
+      associatedData,
+    );
+
+    // Encrypt answer
+    const encryptedAnswer = await this.crypto.encrypt(
+      JSON.stringify(answerKey),
+      associatedData,
+    );
+
+    const newVersion = await this.prisma.$transaction(async (tx) => {
+      await tx.question.update({
+        where: { id: parentVersion.questionId },
+        data: {
+          currentVersion: newVersionNo,
+          difficulty: metadata.difficulty,
+          cognitiveLevel: metadata.cognitiveLevel as any,
+          marks: metadata.marks,
+          negativeMarks: metadata.negativeMarks ?? 0,
+          estimatedTime: metadata.estimatedTimeSeconds,
+          language: (metadata.language as any) || 'EN',
+        },
+      });
+
+      return tx.questionVersion.create({
+        data: {
+          questionId: parentVersion.questionId,
+          versionNo: newVersionNo,
+          status: 'DRAFT', // Starts in DRAFT, follows full pipeline
+          authorId: userId,
+          parentVersionId: parentVersion.id,
+          changeJustification: input.changeJustification,
+          encryptedContent: encryptedContent.ciphertext,
+          contentNonce: encryptedContent.nonce,
+          contentTag: encryptedContent.tag,
+          encryptedContentKey: encryptedContent.wrappedKey,
+          encryptedAnswer: encryptedAnswer.ciphertext,
+          answerNonce: encryptedAnswer.nonce,
+          answerTag: encryptedAnswer.tag,
+          encryptedAnswerKey: encryptedAnswer.wrappedKey,
+          contentCommitment: commitment,
+          keyId: encryptedContent.keyId,
+        },
+      });
+    });
+
+    await this.audit.log({
+      actorId: userId,
+      action: 'NEW_VERSION_CREATE',
+      targetType: 'question_version',
+      targetId: newVersion.id,
+      metadata: {
+        questionId: parentVersion.questionId,
+        parentVersionId: parentVersion.id,
+        versionNo: newVersionNo,
+        justificationLength: input.changeJustification.length,
+      },
+    });
+
+    return {
+      id: parentVersion.questionId,
+      humanId: parentVersion.question.humanId,
+      versionNo: newVersionNo,
+      status: 'DRAFT',
+      parentVersionId: parentVersion.id,
     };
   }
 

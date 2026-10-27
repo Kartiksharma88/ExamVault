@@ -4,6 +4,17 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 jest.mock('sanitize-html', () => {
   return jest.fn((text: string) => text);
 });
+jest.mock('pg-boss', () => {
+  return {
+    PgBoss: jest.fn().mockImplementation(() => ({
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+      send: jest.fn().mockResolvedValue(undefined),
+      work: jest.fn().mockResolvedValue(undefined),
+      on: jest.fn(),
+    })),
+  };
+});
 import { QuestionsService } from '../src/questions/questions.service';
 import { AuditService } from '../src/audit/audit.service';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -11,6 +22,7 @@ import { CryptoService } from '../src/crypto/crypto.service';
 import { LocalKeyProvider } from '../src/crypto/local-key-provider';
 import { KEY_PROVIDER } from '../src/crypto/key-provider.interface';
 import { ConfigService } from '@nestjs/config';
+import { ScreeningQueue } from '../src/originality/screening.queue';
 
 describe('Security & Authorization Controls (Acceptance Criteria)', () => {
   let questionsService: QuestionsService;
@@ -78,6 +90,12 @@ describe('Security & Authorization Controls (Acceptance Criteria)', () => {
         {
           provide: ConfigService,
           useValue: mockConfig,
+        },
+        {
+          provide: ScreeningQueue,
+          useValue: {
+            enqueue: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

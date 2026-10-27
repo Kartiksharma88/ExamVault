@@ -274,4 +274,131 @@ export class AuditService {
     }
     return sanitized;
   }
+
+  /**
+   * Cryptographically verify all signed approval records for a question version
+   * Runs without accessing question content — accessible to AUDITOR and all authorized roles
+   */
+  async verifyApprovals(questionId: string, versionNo: number) {
+    const version = await this.prisma.questionVersion.findUnique({
+      where: { questionId_versionNo: { questionId, versionNo } },
+      include: { question: true },
+    });
+
+    if (!version) {
+      throw new Error(`Version ${versionNo} not found for question ${questionId}`);
+    }
+
+    const approvals = await this.prisma.approval.findMany({
+      where: { questionId, versionNo },
+      include: {
+        approver: {
+          include: { signingKey: true },
+        },
+      },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    // Check policy requirements
+    const policy = await this.prisma.approvalPolicy.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { subjectId: version.question.subjectId },
+          { examId: version.question.subjectId },
+          { subjectId: null, examId: null },
+        ],
+      },
+      orderBy: { version: 'desc' },
+    });
+
+    const requiredReviewers = policy?.requiredReviewers ?? 2;
+    const requireModerator = policy?.requireModerator ?? true;
+
+    const verifiedRecords = [];
+    let validReviewerApprovals = 0;
+    let validModeratorApproval = false;
+
+    for (const app of approvals) {
+      const canonicalString = [
+        app.id,
+        app.questionId,
+        String(app.versionNo),
+        app.contentCommitment,
+        app.decision,
+        app.role,
+        app.approverId,
+        String(app.reviewRound),
+        String(app.policyVersion),
+        app.timestamp.toISOString(),
+      ].join('|');
+      const canonicalData = Buffer.from(canonicalString, 'utf-8');
+
+      const commitmentMatches = app.contentCommitment === version.contentCommitment;
+      let signatureValid = false;
+
+      if (app.approver?.signingKey) {
+        try {
+          const pubKeyDer = Buffer.from(app.approver.signingKey.publicKey, 'base64');
+          const pubKey = crypto.createPublicKey({ key: pubKeyDer, format: 'der', type: 'spki' });
+          signatureValid = crypto.verify(
+            null,
+            canonicalData,
+            pubKey,
+            Buffer.from(app.signature, 'base64'),
+          );
+        } catch {
+          signatureValid = false;
+        }
+      }
+
+      const isValid = signatureValid && commitmentMatches;
+      if (isValid && app.decision === 'APPROVE') {
+        if (app.role === 'REVIEWER') validReviewerApprovals++;
+        if (app.role === 'MODERATOR') validModeratorApproval = true;
+      }
+
+      verifiedRecords.push({
+        id: app.id,
+        questionId: app.questionId,
+        versionNo: app.versionNo,
+        contentCommitment: app.contentCommitment,
+        commitmentMatches,
+        decision: app.decision,
+        role: app.role,
+        approverId: app.approverId,
+        approverName: app.approver?.name,
+        reviewRound: app.reviewRound,
+        policyVersion: app.policyVersion,
+        timestamp: app.timestamp.toISOString(),
+        signature: app.signature,
+        validSignature: signatureValid,
+        isValid,
+      });
+    }
+
+    const meetsPolicyRequirements =
+      validReviewerApprovals >= requiredReviewers &&
+      (!requireModerator || validModeratorApproval);
+
+    const isEligible =
+      version.status === 'APPROVED' &&
+      !version.supersededAt &&
+      meetsPolicyRequirements;
+
+    return {
+      questionId,
+      versionNo,
+      storedContentCommitment: version.contentCommitment,
+      status: version.status,
+      approvals: verifiedRecords,
+      totalApprovals: approvals.length,
+      validReviewerApprovals,
+      requiredReviewers,
+      validModeratorApproval,
+      requireModerator,
+      meetsPolicyRequirements,
+      isEligible,
+    };
+  }
 }

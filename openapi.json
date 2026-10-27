@@ -2,16 +2,22 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ExamVault API",
-    "description": "Secure Examination Paper Generation Framework — Step 1: Examiner Portal and Question Bank",
-    "version": "0.1.0",
+    "description": "Secure Examination Paper Generation Framework — Step 1: Question Bank & Step 2: Review, Originality Check, and Approval Workflow",
+    "version": "0.2.0",
     "contact": {}
   },
   "tags": [
     { "name": "Auth", "description": "Authentication, session management, and TOTP MFA" },
     { "name": "Users", "description": "Institutional user and role administration (ADMIN only)" },
     { "name": "Syllabus", "description": "Hierarchical syllabus management (Exam > Subject > Topic > Subtopic)" },
-    { "name": "Questions", "description": "Encrypted question authoring, versioning, and lifecycle management" },
-    { "name": "Audit", "description": "Tamper-evident append-only cryptographic audit chain" },
+    { "name": "Questions", "description": "Encrypted question authoring, versioning, revisions, and feedback" },
+    { "name": "Review", "description": "Independent double-blind peer review with solve-first barrier and Ed25519 signing" },
+    { "name": "Moderation", "description": "Moderator console, duplicate dispositions, disagreements, reassignments, and final approval" },
+    { "name": "Policies", "description": "Dual-admin approval policies governing thresholds and reviewer quotas" },
+    { "name": "Conflicts", "description": "Free-text conflict-of-interest declarations" },
+    { "name": "Corpora", "description": "Archived past papers and public reference corpora management" },
+    { "name": "Audit", "description": "Tamper-evident append-only cryptographic audit chain and Ed25519 approval verification" },
+    { "name": "Internal", "description": "Internal network endpoints for Step 4 paper generation eligibility and originality sync" },
     { "name": "Import", "description": "Bulk all-or-nothing question import from CSV" },
     { "name": "Statistics", "description": "Non-leaking bank metadata analytics and distributions" },
     { "name": "Health", "description": "Service liveness and readiness probe" }
@@ -444,6 +450,205 @@
         "summary": "Get aggregate bank metadata distributions (Zero content leak)",
         "security": [{ "cookieAuth": [] }],
         "responses": { "200": { "description": "Bank statistics" } }
+      }
+    },
+    "/questions/{id}/feedback": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "Get double-blind feedback timeline for a question (Author view: identities masked to Reviewer A/B/Moderator)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Double-blind feedback history" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/questions/new-version": {
+      "post": {
+        "tags": ["Questions"],
+        "summary": "Create new DRAFT revision from CHANGES_REQUESTED, APPROVED, or REJECTED version with change justification",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "201": { "description": "New DRAFT version created" } }
+      }
+    },
+    "/questions/{id}/withdraw": {
+      "post": {
+        "tags": ["Questions"],
+        "summary": "Withdraw submitted question before peer review has commenced",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Question withdrawn" } }
+      }
+    },
+    "/review/queue": {
+      "get": {
+        "tags": ["Review"],
+        "summary": "Get pending and completed peer review assignments for the current reviewer",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Assigned review queue" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/review/assignments/{id}": {
+      "get": {
+        "tags": ["Review"],
+        "summary": "Get review assignment workspace with server-enforced blind solve barrier (Answer key withheld in SOLVE phase)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Review workspace" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/review/assignments/{id}/blind-answer": {
+      "post": {
+        "tags": ["Review"],
+        "summary": "Phase 1: Submit blind solve answer, time taken, and difficulty rating. Computes match with author key and raises DISAGREEMENT flag if mismatched",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Blind answer submitted and EVALUATE phase unlocked" } }
+      }
+    },
+    "/review/assignments/{id}/evaluate": {
+      "post": {
+        "tags": ["Review"],
+        "summary": "Phase 2: Submit structured checklist, comments, decision (APPROVE, REQUEST_CHANGES, REJECT) with step-up MFA and Ed25519 signature",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Review evaluation and signed approval recorded" } }
+      }
+    },
+    "/moderation/queue": {
+      "get": {
+        "tags": ["Moderation"],
+        "summary": "Get 5-tab moderator console feed: duplicate flags, disagreements, ready for approval, overdue, and staffing warnings",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Moderator queue" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/moderation/duplicate-disposition": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Disposition duplicate flag (NOT_DUPLICATE, SIMILAR_ALLOWED, CONFIRMED_DUPLICATE) with mandatory encrypted justification",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Disposition recorded and question routed" } }
+      }
+    },
+    "/moderation/decision": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Moderator final approval / request-changes / rejection with step-up MFA and Ed25519 digital signature. Triggers atomic parent version supersession.",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Decision executed" } }
+      }
+    },
+    "/moderation/disagreements/{reviewId}/resolve": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Moderator resolves or overrides a blind answer disagreement",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "reviewId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Disagreement resolved" } }
+      }
+    },
+    "/moderation/reassign": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Moderator reassigns an overdue or conflicted review assignment to a new eligible reviewer",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Reviewer reassigned" } }
+      }
+    },
+    "/moderation/retire": {
+      "post": {
+        "tags": ["Moderation"],
+        "summary": "Moderator retires an approved question with mandatory reason and audit event",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Question retired" } }
+      }
+    },
+    "/policies": {
+      "get": {
+        "tags": ["Policies"],
+        "summary": "List all active and proposed approval policies (Admin only; zero question content)",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Policy list" } }
+      }
+    },
+    "/policies/propose": {
+      "post": {
+        "tags": ["Policies"],
+        "summary": "Propose a new approval policy (Admin 1 of 2)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "201": { "description": "Policy proposed" } }
+      }
+    },
+    "/policies/approve": {
+      "post": {
+        "tags": ["Policies"],
+        "summary": "Approve and activate an approval policy (Admin 2 of 2; dual-control requires approver !== proposer)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "200": { "description": "Policy activated" } }
+      }
+    },
+    "/conflicts": {
+      "get": {
+        "tags": ["Conflicts"],
+        "summary": "List declared conflicts of interest for the current user",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "List of COI declarations" } }
+      },
+      "post": {
+        "tags": ["Conflicts"],
+        "summary": "Declare a conflict of interest (institution, coaching centre, or person)",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "201": { "description": "COI declaration recorded" } }
+      }
+    },
+    "/conflicts/{id}": {
+      "delete": {
+        "tags": ["Conflicts"],
+        "summary": "Revoke a conflict of interest declaration",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Declaration revoked" } }
+      }
+    },
+    "/corpus/sources": {
+      "get": {
+        "tags": ["Corpora"],
+        "summary": "List imported past paper and public reference corpus sources",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Corpus source list" } }
+      }
+    },
+    "/corpus/import": {
+      "post": {
+        "tags": ["Corpora"],
+        "summary": "Import past paper or public reference questions from JSON or CSV",
+        "security": [{ "cookieAuth": [] }, { "csrf": [] }],
+        "responses": { "201": { "description": "Documents imported into corpus" } }
+      }
+    },
+    "/audit/approvals/verify/{questionId}/{versionNo}": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "Verify all Ed25519 digital signatures and content commitments for a question version without seeing content (AUDITOR access)",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "questionId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "versionNo", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Approval signature verification result" } }
+      }
+    },
+    "/internal/eligible-questions": {
+      "get": {
+        "tags": ["Internal"],
+        "summary": "Internal feed for Step 4 paper generation: returns metadata of questions with verified signed approvals. Zero content leak.",
+        "responses": { "200": { "description": "List of eligible question versions" } }
+      }
+    },
+    "/internal/originality-feed": {
+      "get": {
+        "tags": ["Internal"],
+        "summary": "Authenticated internal feed for originality-service RAM bank index initialization (Internal network only)",
+        "responses": { "200": { "description": "Question bank normalized stream" } }
       }
     },
     "/health": {

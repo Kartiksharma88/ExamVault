@@ -11,6 +11,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - app_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-examvault}"]
       interval: 5s
@@ -30,6 +32,8 @@ services:
       - "9001:9001"
     volumes:
       - miniodata:/data
+    networks:
+      - app_net
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -52,6 +56,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-examvault_minio}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-examvault_minio_secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-examvault-images}
+    networks:
+      - app_net
 
   mailcatcher:
     image: schickling/mailcatcher:latest
@@ -60,6 +66,24 @@ services:
     ports:
       - "1080:1080"
       - "1025:1025"
+    networks:
+      - app_net
+
+  originality-service:
+    build:
+      context: ./apps/originality-service
+      dockerfile: Dockerfile
+    container_name: examvault-originality
+    restart: unless-stopped
+    environment:
+      ORIGINALITY_SERVICE_TOKEN: ${ORIGINALITY_SERVICE_TOKEN:-examvault_internal_secret_token_dev}
+    networks:
+      - internal_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   api:
     build:
@@ -72,6 +96,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      originality-service:
+        condition: service_healthy
     ports:
       - "3001:3001"
     environment:
@@ -80,6 +106,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-examvault}:${POSTGRES_PASSWORD:-examvault_dev_password}@postgres:5432/${POSTGRES_DB:-examvault}?schema=public
       MASTER_KEY: ${MASTER_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       AUDIT_SIGNING_KEY: ${AUDIT_SIGNING_KEY:-MC4CAQAwBQYDK2VwBCIEINXgqVzX7uF9xL6WJ6+Gv3P4J2yW8x9Q/bM1t9q7Yv3F}
+      ORIGINALITY_SERVICE_URL: http://originality-service:8000
+      ORIGINALITY_SERVICE_TOKEN: ${ORIGINALITY_SERVICE_TOKEN:-examvault_internal_secret_token_dev}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: "false"
@@ -88,6 +116,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-examvault-images}
       CORS_ORIGIN: http://localhost:80,http://localhost:5173
       SESSION_SECRET: ${SESSION_SECRET:-super_secret_session_key_examvault_32_chars_min}
+    networks:
+      - app_net
+      - internal_net
 
   web:
     build:
@@ -99,7 +130,17 @@ services:
       - api
     ports:
       - "80:80"
+    networks:
+      - app_net
 
 volumes:
   pgdata:
   miniodata:
+
+networks:
+  app_net:
+    driver: bridge
+  # Dedicated strictly internal network without outbound gateway
+  internal_net:
+    driver: bridge
+    internal: true

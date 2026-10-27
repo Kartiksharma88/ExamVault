@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Param,
   Query,
   HttpCode,
   HttpStatus,
@@ -58,4 +59,20 @@ export class AuditController {
     const result = await this.auditService.verifyChain();
     return { success: true, data: result };
   }
+
+  @Get('approvals/verify/:questionId/:versionNo')
+  @Roles('ADMIN', 'AUDITOR', 'MODERATOR', 'REVIEWER', 'EXAMINER')
+  @SkipCsrf()
+  @ApiOperation({ summary: 'Verify all digital approval signatures for a question version (Zero Content)' })
+  async verifyApprovals(
+    @Param('questionId') questionId: string,
+    @Param('versionNo') versionNo: string,
+  ) {
+    const result = await this.auditService.verifyApprovals(
+      questionId,
+      parseInt(versionNo, 10),
+    );
+    return { success: true, data: result };
+  }
 }
+

@@ -85,6 +85,44 @@ function computeCommitment(canonicalJson: string): { commitment: string; salt: s
   return { commitment: hash.digest('hex'), salt };
 }
 
+function generateWrappedSigningKey(masterKey: Buffer) {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  const privateKeyDer = privateKey.export({ type: 'pkcs8', format: 'der' });
+  const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' });
+  const publicKeyB64 = publicKeyDer.toString('base64');
+  const wrappedKey = wrapKey(privateKeyDer, masterKey);
+  return { publicKeyB64, wrappedKey, privateKey };
+}
+
+function signApprovalPayload(
+  approvalId: string,
+  questionId: string,
+  versionNo: number,
+  contentCommitment: string,
+  decision: string,
+  role: string,
+  approverId: string,
+  reviewRound: number,
+  policyVersion: number,
+  timestamp: Date,
+  privateKey: crypto.KeyObject,
+): string {
+  const payload = [
+    approvalId,
+    questionId,
+    versionNo,
+    contentCommitment,
+    decision,
+    role,
+    approverId,
+    reviewRound,
+    policyVersion,
+    timestamp.toISOString(),
+  ].join('|');
+  const sig = crypto.sign(null, Buffer.from(payload, 'utf-8'), privateKey);
+  return sig.toString('base64');
+}
+
 // ── Signing helpers ──
 let signingKey: crypto.KeyObject;
 let verifyKey: crypto.KeyObject;
@@ -240,7 +278,18 @@ async function main() {
       mustSetupMfa: true,
     },
   });
-  console.log(`  ✅ Admin: ${admin.email}`);
+  const admin2 = await prisma.user.upsert({
+    where: { email: 'admin2@examvault.local' },
+    update: {},
+    create: {
+      email: 'admin2@examvault.local',
+      name: 'Secondary Administrator (Policy Approver)',
+      passwordHash: adminHash,
+      role: 'ADMIN',
+      mustSetupMfa: true,
+    },
+  });
+  console.log(`  ✅ Admins: ${admin.email}, ${admin2.email}`);
 
   // ── 2. Create sample users ──
   const examinerHash = await argon2.hash('Examiner@2024!pass', {
@@ -271,15 +320,122 @@ async function main() {
     },
   });
 
-  const reviewer = await prisma.user.upsert({
+  const examiner3 = await prisma.user.upsert({
+    where: { email: 'examiner3@examvault.local' },
+    update: {},
+    create: {
+      email: 'examiner3@examvault.local',
+      name: 'Dr. Sneha Rao',
+      passwordHash: examinerHash,
+      role: 'EXAMINER',
+      mustSetupMfa: true,
+    },
+  });
+
+  // Moderators
+  const moderator1 = await prisma.user.upsert({
+    where: { email: 'moderator1@examvault.local' },
+    update: {},
+    create: {
+      email: 'moderator1@examvault.local',
+      name: 'Dr. Arvind Swaminathan (Lead Moderator)',
+      passwordHash: examinerHash,
+      role: 'MODERATOR',
+      mustSetupMfa: true,
+    },
+  });
+
+  const moderator2 = await prisma.user.upsert({
+    where: { email: 'moderator2@examvault.local' },
+    update: {},
+    create: {
+      email: 'moderator2@examvault.local',
+      name: 'Prof. Meenakshi Sundaram (Moderator)',
+      passwordHash: examinerHash,
+      role: 'MODERATOR',
+      mustSetupMfa: true,
+    },
+  });
+
+  // 6 Reviewers
+  const reviewerData = [
+    { email: 'reviewer1@examvault.local', name: 'Dr. Ananya Patel', subjects: ['PHY', 'CHE'] },
+    { email: 'reviewer2@examvault.local', name: 'Prof. Amit Verma', subjects: ['PHY', 'MAT'] },
+    { email: 'reviewer3@examvault.local', name: 'Dr. Kavita Nair', subjects: ['CHE'] },
+    { email: 'reviewer4@examvault.local', name: 'Dr. Rahul Mehra', subjects: ['MAT'] },
+    { email: 'reviewer5@examvault.local', name: 'Dr. Suresh Joshi', subjects: ['PHY'] },
+    { email: 'reviewer6@examvault.local', name: 'Dr. Deepa Sundaram', subjects: ['CHE', 'MAT'] },
+  ];
+
+  const reviewers: any[] = [];
+  const reviewerPrivateKeys: Record<string, crypto.KeyObject> = {};
+
+  for (const r of reviewerData) {
+    const user = await prisma.user.upsert({
+      where: { email: r.email },
+      update: {},
+      create: {
+        email: r.email,
+        name: r.name,
+        passwordHash: examinerHash,
+        role: 'REVIEWER',
+        mustSetupMfa: true,
+      },
+    });
+    reviewers.push(user);
+
+    // Create signing key
+    const sigKey = generateWrappedSigningKey(masterKey);
+    reviewerPrivateKeys[user.id] = sigKey.privateKey;
+    await prisma.userSigningKey.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+        publicKey: sigKey.publicKeyB64,
+        wrappedPrivateKey: sigKey.wrappedKey,
+        keyId,
+      },
+    });
+  }
+
+  // Also ensure legacy reviewer@examvault.local exists
+  const legacyReviewer = await prisma.user.upsert({
     where: { email: 'reviewer@examvault.local' },
     update: {},
     create: {
       email: 'reviewer@examvault.local',
-      name: 'Dr. Ananya Patel',
+      name: 'Dr. Ananya Patel (Default)',
       passwordHash: examinerHash,
       role: 'REVIEWER',
       mustSetupMfa: true,
+    },
+  });
+
+  // Signing keys for moderators
+  const mod1Sig = generateWrappedSigningKey(masterKey);
+  const mod2Sig = generateWrappedSigningKey(masterKey);
+  const mod1PrivateKey = mod1Sig.privateKey;
+  const mod2PrivateKey = mod2Sig.privateKey;
+
+  await prisma.userSigningKey.upsert({
+    where: { userId: moderator1.id },
+    update: {},
+    create: {
+      userId: moderator1.id,
+      publicKey: mod1Sig.publicKeyB64,
+      wrappedPrivateKey: mod1Sig.wrappedKey,
+      keyId,
+    },
+  });
+  await prisma.userSigningKey.upsert({
+    where: { userId: moderator2.id },
+    update: {},
+    create: {
+      userId: moderator2.id,
+      publicKey: mod2Sig.publicKeyB64,
+      wrappedPrivateKey: mod2Sig.wrappedKey,
+      keyId,
     },
   });
 
@@ -295,7 +451,7 @@ async function main() {
     },
   });
 
-  console.log(`  ✅ Users: ${examiner1.name}, ${examiner2.name}, ${reviewer.name}, ${auditor.name}`);
+  console.log(`  ✅ Users: 2 Admins, 3 Examiners, 2 Moderators, 6 Reviewers, 1 Auditor`);
 
   // ── 3. Create Exam and Syllabus ──
   const exam = await prisma.exam.upsert({
@@ -383,6 +539,146 @@ async function main() {
 
   console.log(`  ✅ Syllabus: ${phyTopics.length + cheTopics.length + matTopics.length} topics`);
 
+  // ── 3.1 Reviewer Subject Expertise ──
+  const subjectMap: Record<string, string> = {
+    PHY: phySubject.id,
+    CHE: cheSubject.id,
+    MAT: matSubject.id,
+  };
+  for (let i = 0; i < reviewerData.length; i++) {
+    const r = reviewerData[i];
+    const user = reviewers[i];
+    for (const sCode of r.subjects) {
+      await prisma.userSubjectExpertise.upsert({
+        where: { userId_subjectId: { userId: user.id, subjectId: subjectMap[sCode] } },
+        update: {},
+        create: {
+          userId: user.id,
+          subjectId: subjectMap[sCode],
+        },
+      });
+    }
+  }
+
+  // ── 3.2 Sample Conflict Declarations ──
+  function encryptConflict(text: string, userId: string, mKey: Buffer) {
+    const dataKey = crypto.randomBytes(32);
+    const nonce = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', dataKey, nonce);
+    cipher.setAAD(Buffer.from(userId, 'utf-8'));
+    const ciphertext = Buffer.concat([cipher.update(text, 'utf-8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    const wrappedKey = wrapKey(dataKey, mKey);
+    const conflictHash = crypto.createHash('sha256').update(text.toLowerCase().trim()).digest('hex');
+    return { ciphertext, nonce, tag, wrappedKey, conflictHash };
+  }
+
+  const c1 = encryptConflict('Allen Career Institute, Kota', examiner1.id, masterKey);
+  await prisma.conflictDeclaration.upsert({
+    where: { id: deterministicUuid('conflict-1') },
+    update: {},
+    create: {
+      id: deterministicUuid('conflict-1'),
+      userId: examiner1.id,
+      conflictType: 'COACHING_CENTRE',
+      encryptedDescription: c1.ciphertext,
+      descriptionNonce: c1.nonce,
+      descriptionTag: c1.tag,
+      wrappedKey: c1.wrappedKey,
+      keyId,
+      conflictHash: c1.conflictHash,
+    },
+  });
+
+  const c2 = encryptConflict(`Conflicted with reviewer Dr. Kavita Nair (${reviewers[2].id})`, examiner1.id, masterKey);
+  await prisma.conflictDeclaration.upsert({
+    where: { id: deterministicUuid('conflict-2') },
+    update: {},
+    create: {
+      id: deterministicUuid('conflict-2'),
+      userId: examiner1.id,
+      conflictType: 'PERSON',
+      encryptedDescription: c2.ciphertext,
+      descriptionNonce: c2.nonce,
+      descriptionTag: c2.tag,
+      wrappedKey: c2.wrappedKey,
+      keyId,
+      conflictHash: c2.conflictHash,
+    },
+  });
+
+  // ── 3.3 Approval Policies (Active, dual-admin approved) ──
+  const globalPolicy = await prisma.approvalPolicy.upsert({
+    where: { id: deterministicUuid('policy-global-v1') },
+    update: {},
+    create: {
+      id: deterministicUuid('policy-global-v1'),
+      examId: exam.id,
+      version: 1,
+      requiredReviewers: 2,
+      requireBlindSolve: true,
+      requireModerator: true,
+      requireLanguageReview: true,
+      maxReviewDays: 7,
+      exactMatchThreshold: 1.0,
+      highSimilarityThreshold: 0.85,
+      mediumSimilarityThreshold: 0.60,
+      proposedById: admin.id,
+      approvedById: admin2.id,
+      isActive: true,
+    },
+  });
+
+  const phyPolicy = await prisma.approvalPolicy.upsert({
+    where: { id: deterministicUuid('policy-phy-v1') },
+    update: {},
+    create: {
+      id: deterministicUuid('policy-phy-v1'),
+      examId: exam.id,
+      subjectId: phySubject.id,
+      version: 1,
+      requiredReviewers: 2,
+      requireBlindSolve: true,
+      requireModerator: true,
+      requireLanguageReview: true,
+      maxReviewDays: 7,
+      exactMatchThreshold: 1.0,
+      highSimilarityThreshold: 0.85,
+      mediumSimilarityThreshold: 0.60,
+      proposedById: admin.id,
+      approvedById: admin2.id,
+      isActive: true,
+    },
+  });
+  console.log(`  ✅ Approval Policies configured (Dual-admin approved)`);
+
+  // ── 3.4 Past Papers and Public Corpus ──
+  const pastPaperSource = await prisma.corpusSource.upsert({
+    where: { id: deterministicUuid('corpus-past-papers') },
+    update: {},
+    create: {
+      id: deterministicUuid('corpus-past-papers'),
+      name: 'JEE Advanced Past Papers (2018-2023)',
+      type: 'PAST_PAPER',
+      licenseNote: 'Public examination archives for research and screening benchmark',
+      importedById: admin.id,
+    },
+  });
+
+  await prisma.corpusDocument.upsert({
+    where: { id: deterministicUuid('doc-jee-2022-p1') },
+    update: {},
+    create: {
+      id: deterministicUuid('doc-jee-2022-p1'),
+      sourceId: pastPaperSource.id,
+      title: 'JEE Advanced 2022 Paper 1 - Physics Q4',
+      identifier: 'JEE-2022-P1-Q04',
+      plaintextContent: 'A body of mass 5 kg is moving with a velocity of 10 m/s. What is its kinetic energy? Options: 250 J, 500 J, 100 J, 50 J. Answer: 250 J.',
+      normalizedContent: 'body mass 5 kg moving velocity 10 m s kinetic energy options 250 j 500 j 100 j 50 j answer 250 j',
+    },
+  });
+  console.log(`  ✅ Corpus & Past Papers loaded`);
+
   // ── 4. Create 200+ synthetic questions ──
   const allPhyQuestions = [...physicsQuestions, ...generateMore(physicsQuestions, phyTopics, 55)];
   const allCheQuestions = [...chemistryQuestions, ...generateMore(chemistryQuestions, cheTopics, 55)];
@@ -394,11 +690,11 @@ async function main() {
     ...allMatQuestions.map(q => ({ ...q, subject: matSubject, topicRecords: matTopicRecords })),
   ];
 
-  console.log(`  📝 Creating ${allQuestions.length} questions...`);
+  console.log(`  📝 Creating ${allQuestions.length} questions across Step 2 workflow states...`);
 
   let questionCount = 0;
   for (const q of allQuestions) {
-    const authorId = questionCount % 2 === 0 ? examiner1.id : examiner2.id;
+    const authorId = questionCount % 3 === 0 ? examiner1.id : questionCount % 3 === 1 ? examiner2.id : examiner3.id;
     const subject = q.subject;
     const topicId = q.topicRecords[q.topic] || Object.values(q.topicRecords)[0];
 
@@ -436,6 +732,7 @@ async function main() {
         label: String.fromCharCode(65 + idx),
         text,
       })),
+      solution: `Step-by-step verified solution for ${q.stem}`,
       language: (q as any).language || 'EN',
     };
 
@@ -449,10 +746,25 @@ async function main() {
     const contentEnvelope = encrypt(JSON.stringify(contentWithSalt), associatedData, masterKey);
     const answerEnvelope = encrypt(JSON.stringify(answerKey), associatedData, masterKey);
 
-    // Determine status (mix of DRAFT and SUBMITTED)
-    const status = questionCount % 3 === 0 ? 'SUBMITTED' : 'DRAFT';
+    // Explicit state allocation for first 10 questions to guarantee representation of each Step 2 state
+    let status = 'DRAFT';
+    if (questionCount === 0) status = 'DRAFT';
+    else if (questionCount === 1) status = 'SUBMITTED';
+    else if (questionCount === 2) status = 'SCREENING';
+    else if (questionCount === 3) status = 'DUPLICATE_FLAGGED';
+    else if (questionCount === 4) status = 'READY_FOR_REVIEW';
+    else if (questionCount === 5) status = 'UNDER_REVIEW';
+    else if (questionCount === 6) status = 'CHANGES_REQUESTED';
+    else if (questionCount === 7) status = 'MODERATION';
+    else if (questionCount === 8) status = 'APPROVED';
+    else if (questionCount === 9) status = 'RETIRED';
+    else {
+      // General distribution
+      const mod = questionCount % 5;
+      status = mod === 0 ? 'DRAFT' : mod === 1 ? 'SUBMITTED' : mod === 2 ? 'READY_FOR_REVIEW' : mod === 3 ? 'UNDER_REVIEW' : 'APPROVED';
+    }
 
-    await prisma.questionVersion.create({
+    const version = await prisma.questionVersion.create({
       data: {
         questionId: question.id,
         versionNo: 1,
@@ -468,8 +780,232 @@ async function main() {
         encryptedAnswerKey: answerEnvelope.wrappedKey,
         contentCommitment: commitment.commitment,
         keyId,
+        policyVersion: 1,
+        retirementReason: status === 'RETIRED' ? 'SUPERSEDED' : null,
+        supersededAt: status === 'RETIRED' ? new Date() : null,
       },
     });
+
+    // ── Supporting workflow entities for the demo states ──
+    if (status === 'DUPLICATE_FLAGGED') {
+      const report = await prisma.originalityReport.create({
+        data: {
+          questionVersionId: version.id,
+          riskLevel: 'HIGH',
+          highestScore: 0.94,
+          checkedAt: new Date(),
+          serviceVersion: '1.0.0',
+        },
+      });
+      await prisma.originalityMatch.create({
+        data: {
+          reportId: report.id,
+          sourceType: 'PAST_PAPER',
+          sourceReference: 'JEE-2022-P1-Q04 (JEE Advanced 2022 Paper 1)',
+          overallScore: 0.94,
+          minhashScore: 0.91,
+          tfidfScore: 0.96,
+          exactHashMatch: false,
+          sourceTextSnippet: 'A body of mass 5 kg is moving with a velocity of 10 m/s...',
+        },
+      });
+    } else if (status === 'READY_FOR_REVIEW') {
+      await prisma.originalityReport.create({
+        data: {
+          questionVersionId: version.id,
+          riskLevel: 'NONE',
+          highestScore: 0.12,
+          checkedAt: new Date(),
+          serviceVersion: '1.0.0',
+        },
+      });
+    } else if (status === 'UNDER_REVIEW') {
+      const round = await prisma.reviewRound.create({
+        data: {
+          questionVersionId: version.id,
+          roundNumber: 1,
+          policyVersion: 1,
+          status: 'ACTIVE',
+        },
+      });
+      await prisma.reviewAssignment.create({
+        data: {
+          roundId: round.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[0].id,
+          dueDate: new Date(Date.now() + 7 * 86400000),
+          eligibleCount: 4,
+          selectionSeed: crypto.randomBytes(16).toString('hex'),
+          status: 'IN_PROGRESS',
+        },
+      });
+      await prisma.reviewAssignment.create({
+        data: {
+          roundId: round.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[1].id,
+          dueDate: new Date(Date.now() + 7 * 86400000),
+          eligibleCount: 4,
+          selectionSeed: crypto.randomBytes(16).toString('hex'),
+          status: 'PENDING',
+        },
+      });
+    } else if (status === 'MODERATION') {
+      const round = await prisma.reviewRound.create({
+        data: {
+          questionVersionId: version.id,
+          roundNumber: 1,
+          policyVersion: 1,
+          status: 'COMPLETED',
+        },
+      });
+      // Review 1
+      const a1 = await prisma.reviewAssignment.create({
+        data: {
+          roundId: round.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[0].id,
+          dueDate: new Date(Date.now() + 7 * 86400000),
+          eligibleCount: 4,
+          selectionSeed: crypto.randomBytes(16).toString('hex'),
+          status: 'COMPLETED',
+        },
+      });
+      await prisma.review.create({
+        data: {
+          assignmentId: a1.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[0].id,
+          phase: 'EVALUATE',
+          contentCommitment: commitment.commitment,
+          decision: 'APPROVE',
+          difficultyRating: 0.35,
+          blindAnswerMatchesKey: true,
+          checklist: { accuracy: true, clarity: true, distractors: true, syllabus: true },
+        },
+      });
+      // Review 2
+      const a2 = await prisma.reviewAssignment.create({
+        data: {
+          roundId: round.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[1].id,
+          dueDate: new Date(Date.now() + 7 * 86400000),
+          eligibleCount: 4,
+          selectionSeed: crypto.randomBytes(16).toString('hex'),
+          status: 'COMPLETED',
+        },
+      });
+      await prisma.review.create({
+        data: {
+          assignmentId: a2.id,
+          questionVersionId: version.id,
+          reviewerId: reviewers[1].id,
+          phase: 'EVALUATE',
+          contentCommitment: commitment.commitment,
+          decision: 'APPROVE',
+          difficultyRating: 0.40,
+          blindAnswerMatchesKey: true,
+          checklist: { accuracy: true, clarity: true, distractors: true, syllabus: true },
+        },
+      });
+    } else if (status === 'APPROVED') {
+      const round = await prisma.reviewRound.create({
+        data: {
+          questionVersionId: version.id,
+          roundNumber: 1,
+          policyVersion: 1,
+          status: 'COMPLETED',
+        },
+      });
+      // Approvals signed by Reviewer 1, Reviewer 2, and Moderator 1
+      const rev1AppId = deterministicUuid(`app-rev1-${version.id}`);
+      const rev1Sig = signApprovalPayload(
+        rev1AppId,
+        question.id,
+        1,
+        commitment.commitment,
+        'APPROVE',
+        'REVIEWER',
+        reviewers[0].id,
+        1,
+        1,
+        new Date(),
+        reviewerPrivateKeys[reviewers[0].id],
+      );
+      await prisma.approval.create({
+        data: {
+          id: rev1AppId,
+          questionId: question.id,
+          versionNo: 1,
+          contentCommitment: commitment.commitment,
+          decision: 'APPROVE',
+          role: 'REVIEWER',
+          approverId: reviewers[0].id,
+          reviewRound: 1,
+          policyVersion: 1,
+          signature: rev1Sig,
+        },
+      });
+
+      const rev2AppId = deterministicUuid(`app-rev2-${version.id}`);
+      const rev2Sig = signApprovalPayload(
+        rev2AppId,
+        question.id,
+        1,
+        commitment.commitment,
+        'APPROVE',
+        'REVIEWER',
+        reviewers[1].id,
+        1,
+        1,
+        new Date(),
+        reviewerPrivateKeys[reviewers[1].id],
+      );
+      await prisma.approval.create({
+        data: {
+          id: rev2AppId,
+          questionId: question.id,
+          versionNo: 1,
+          contentCommitment: commitment.commitment,
+          decision: 'APPROVE',
+          role: 'REVIEWER',
+          approverId: reviewers[1].id,
+          reviewRound: 1,
+          policyVersion: 1,
+          signature: rev2Sig,
+        },
+      });
+
+      const modAppId = deterministicUuid(`app-mod-${version.id}`);
+      const modSig = signApprovalPayload(
+        modAppId,
+        question.id,
+        1,
+        commitment.commitment,
+        'APPROVE',
+        'MODERATOR',
+        moderator1.id,
+        1,
+        1,
+        new Date(),
+        mod1PrivateKey,
+      );
+      await prisma.approval.create({
+        data: {
+          id: modAppId,
+          questionId: question.id,
+          versionNo: 1,
+          contentCommitment: commitment.commitment,
+          decision: 'APPROVE',
+          role: 'MODERATOR',
+          approverId: moderator1.id,
+          reviewRound: 1,
+          policyVersion: 1,
+          signature: modSig,
+        },
+      });
+    }
 
     questionCount++;
     if (questionCount % 50 === 0) {
@@ -483,19 +1019,23 @@ async function main() {
     action: 'USER_CREATE',
     targetType: 'user',
     targetId: admin.id,
-    metadata: { role: 'ADMIN', email: admin.email, seeded: true },
+    metadata: { role: 'ADMIN', email: admin.email, seeded: true, step2Seeded: true },
   });
 
   console.log(`  ✅ Created ${questionCount} questions (encrypted at rest)`);
   console.log('');
-  console.log('🎉 Seed complete!');
+  console.log('🎉 Seed complete! All Step 2 roles, policies, and workflows populated.');
   console.log('');
   console.log('Credentials:');
-  console.log(`  Admin:     ${adminEmail} / ${adminPassword}`);
-  console.log(`  Examiner1: examiner1@examvault.local / Examiner@2024!pass`);
-  console.log(`  Examiner2: examiner2@examvault.local / Examiner@2024!pass`);
-  console.log(`  Reviewer:  reviewer@examvault.local / Examiner@2024!pass`);
-  console.log(`  Auditor:   auditor@examvault.local / Examiner@2024!pass`);
+  console.log(`  Admin 1 (Proposer):   ${adminEmail} / ${adminPassword}`);
+  console.log(`  Admin 2 (Approver):   admin2@examvault.local / ${adminPassword}`);
+  console.log(`  Examiner 1:           examiner1@examvault.local / Examiner@2024!pass`);
+  console.log(`  Examiner 2:           examiner2@examvault.local / Examiner@2024!pass`);
+  console.log(`  Examiner 3:           examiner3@examvault.local / Examiner@2024!pass`);
+  console.log(`  Moderator 1 (Lead):   moderator1@examvault.local / Examiner@2024!pass`);
+  console.log(`  Moderator 2:          moderator2@examvault.local / Examiner@2024!pass`);
+  console.log(`  Reviewers 1-6:        reviewer1@examvault.local .. reviewer6@examvault.local / Examiner@2024!pass`);
+  console.log(`  Auditor:              auditor@examvault.local / Examiner@2024!pass`);
 }
 
 main()

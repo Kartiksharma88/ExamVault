@@ -87,46 +87,48 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12">
+    <div className="space-y-6 w-full pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center space-x-2">
-            <span>Bulk Question Import</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">
-              All-Or-Nothing
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Bulk Question Import
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-mono font-medium">
+              Atomic Rollback
             </span>
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
             Import batches of exam questions with row-level validation. If any row is invalid, the entire batch rolls back.
           </p>
         </div>
 
         <button
           onClick={handleDownloadTemplate}
-          className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-border shadow-sm transition-all"
+          className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-xs transition-all"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-4 h-4 text-red-600" />
           <span>Download CSV Template</span>
         </button>
       </div>
 
       {/* Upload Box */}
-      <div className="glass-card rounded-2xl p-6 border border-border space-y-4">
-        <label className="border-2 border-dashed border-border hover:border-cyan-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40">
-          <UploadCloud className="w-10 h-10 text-cyan-400 mb-2 opacity-80" />
-          <span className="text-sm font-medium text-white">
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+        <label className="border-2 border-dashed border-slate-300 hover:border-red-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-red-50/20">
+          <UploadCloud className="w-10 h-10 text-red-600 mb-2 opacity-90" />
+          <span className="text-sm font-bold text-slate-900">
             {fileName ? `Loaded: ${fileName}` : 'Click or drag a CSV file here to import'}
           </span>
-          <span className="text-xs text-text-muted mt-1">
-            Supports UTF-8 encoded CSV with Devanagari Unicode and LaTeX formulas
+          <span className="text-xs text-slate-500 mt-1">
+            Supports UTF-8 encoded CSV with Devanagari Hindi Unicode and LaTeX formulas
           </span>
           <input type="file" accept=".csv,text/csv" onChange={handleFileChange} className="hidden" />
         </label>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-text-secondary">Or Paste Raw CSV Content</label>
+            <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Or Paste Raw CSV Content</label>
             {csvContent && (
               <button
                 type="button"
@@ -135,7 +137,7 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
                   setFileName(null);
                   setResult(null);
                 }}
-                className="text-xs text-text-muted hover:text-rose-400"
+                className="text-xs text-red-600 hover:underline font-semibold"
               >
                 Clear
               </button>
@@ -149,7 +151,7 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
               setResult(null);
             }}
             placeholder="type,stem,optionA,optionB,optionC,optionD,correctAnswer,solution,subjectCode,topicName,difficulty,cognitiveLevel,marks,negativeMarks,estimatedTimeSeconds,language"
-            className="w-full p-3.5 bg-slate-950 border border-border rounded-xl text-xs text-cyan-300 font-mono leading-relaxed placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono leading-relaxed placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 resize-y"
           />
         </div>
 
@@ -158,7 +160,7 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
             type="button"
             disabled={loading || !csvContent.trim()}
             onClick={handleImport}
-            className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-glow-sm transition-all disabled:opacity-50 flex items-center space-x-2"
+            className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-xs transition-all disabled:opacity-50 flex items-center space-x-2"
           >
             {loading ? (
               <span>Validating & Encrypting...</span>
@@ -175,34 +177,34 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
       {/* Results Section */}
       {result && (
         <div
-          className={`glass-card rounded-2xl p-6 border ${
-            result.success ? 'border-emerald-500/50' : 'border-rose-500/50'
+          className={`rounded-2xl p-6 border shadow-xs ${
+            result.success ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
           }`}
         >
           {result.success ? (
             <div className="space-y-4 text-center py-4">
-              <div className="inline-flex p-3 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
+              <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-white">Batch Import Succeeded!</h3>
-              <p className="text-sm text-text-secondary max-w-md mx-auto">
+              <h3 className="text-lg font-bold text-slate-900">Batch Import Succeeded!</h3>
+              <p className="text-sm text-slate-600 max-w-md mx-auto">
                 Successfully encrypted and inserted <strong>{result.importedCount}</strong> questions across your
-                subjects. Each question has received an individual data key and content commitment.
+                subjects. Each question has received an individual cryptographic key and content commitment.
               </p>
               <button
                 onClick={onSuccess}
-                className="mt-2 inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                className="mt-2 inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
               >
                 <span>View Questions in Bank</span>
               </button>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center space-x-3 text-rose-400">
-                <AlertCircle className="w-6 h-6 flex-shrink-0" />
+              <div className="flex items-center space-x-3 text-red-700">
+                <AlertCircle className="w-6 h-6 flex-shrink-0 text-red-600" />
                 <div>
-                  <h3 className="font-bold text-base text-white">Import Failed — All Changes Rolled Back</h3>
-                  <p className="text-xs text-text-muted mt-0.5">
+                  <h3 className="font-bold text-base text-red-900">Import Failed — All Changes Rolled Back</h3>
+                  <p className="text-xs text-red-700 mt-0.5">
                     Found {result.errors.length} validation issues in {result.totalRows} submitted rows. Correct the
                     errors below and re-submit.
                   </p>
@@ -210,21 +212,21 @@ export const ImportPage: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) =
               </div>
 
               {/* Error Table */}
-              <div className="rounded-xl border border-border overflow-hidden bg-slate-950/80">
+              <div className="rounded-xl border border-red-200 overflow-hidden bg-white">
                 <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-900 border-b border-border text-text-secondary uppercase">
+                  <thead className="bg-red-100/60 border-b border-red-200 text-red-900 uppercase font-semibold">
                     <tr>
                       <th className="px-4 py-2.5 w-20">Row #</th>
                       <th className="px-4 py-2.5 w-40">Field</th>
                       <th className="px-4 py-2.5">Error Description</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/60">
+                  <tbody className="divide-y divide-red-100">
                     {result.errors.map((err, i) => (
-                      <tr key={i} className="hover:bg-slate-900/40">
-                        <td className="px-4 py-2 text-rose-400 font-bold">{err.row > 0 ? err.row : '—'}</td>
-                        <td className="px-4 py-2 text-amber-300">{err.field}</td>
-                        <td className="px-4 py-2 text-slate-300 font-sans">{err.message}</td>
+                      <tr key={i} className="hover:bg-red-50/50">
+                        <td className="px-4 py-2 text-red-700 font-bold">{err.row > 0 ? err.row : '—'}</td>
+                        <td className="px-4 py-2 text-amber-800 font-semibold">{err.field}</td>
+                        <td className="px-4 py-2 text-slate-800 font-sans">{err.message}</td>
                       </tr>
                     ))}
                   </tbody>

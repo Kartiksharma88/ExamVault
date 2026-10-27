@@ -8,7 +8,7 @@ interface KaTeXPreviewProps {
 
 export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className = '' }) => {
   const renderedHtml = useMemo(() => {
-    if (!content) return '<p class="text-text-muted italic">No content to preview</p>';
+    if (!content) return '<p class="text-slate-400 italic">No content to preview</p>';
 
     // Parse block math $$...$$ first, then inline math $...$
     // Replace $$ math $$ with unique block tokens
@@ -23,10 +23,10 @@ export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className =
           throwOnError: false,
         });
         const index = blockTokens.length;
-        blockTokens.push(`<div class="my-3 overflow-x-auto">${rendered}</div>`);
+        blockTokens.push(`<div class="my-3 overflow-x-auto text-slate-900">${rendered}</div>`);
         return `___BLOCK_MATH_${index}___`;
       } catch (err) {
-        return `<pre class="text-red-400 p-2 text-xs bg-red-950/30 rounded">${String(err)}</pre>`;
+        return `<pre class="text-red-600 p-2 text-xs bg-red-50 rounded border border-red-200">${String(err)}</pre>`;
       }
     });
 
@@ -42,12 +42,11 @@ export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className =
         inlineTokens.push(rendered);
         return `___INLINE_MATH_${index}___`;
       } catch (err) {
-        return `<code class="text-red-400">${math}</code>`;
+        return `<code class="text-red-600">${math}</code>`;
       }
     });
 
     // Basic Markdown transformations (bold, italic, code, linebreaks, headings, lists)
-    // Escape HTML first to prevent XSS
     const escapeHtml = (text: string) =>
       text
         .replace(/&/g, '&amp;')
@@ -59,7 +58,6 @@ export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className =
     // Split lines and process markdown
     const lines = processed.split('\n');
     const formattedLines = lines.map((line) => {
-      // Don't escape our math tokens
       const segments = line.split(/(___BLOCK_MATH_\d+___|___INLINE_MATH_\d+___)/g);
       return segments
         .map((seg) => {
@@ -68,13 +66,13 @@ export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className =
           }
           let escaped = escapeHtml(seg);
           // Bold
-          escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-white">$1</strong>');
+          escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
           // Italic
-          escaped = escaped.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+          escaped = escaped.replace(/\*(.*?)\*/g, '<em class="italic text-slate-800">$1</em>');
           // Inline code
           escaped = escaped.replace(
             /`([^`]+)`/g,
-            '<code class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-sm">$1</code>',
+            '<code class="px-1.5 py-0.5 rounded bg-slate-100 text-red-700 font-mono text-xs border border-slate-200 font-semibold">$1</code>',
           );
           return escaped;
         })
@@ -96,7 +94,7 @@ export const KaTeXPreview: React.FC<KaTeXPreviewProps> = ({ content, className =
 
   return (
     <div
-      className={`prose prose-invert max-w-none text-text-primary leading-relaxed break-words font-sans ${className}`}
+      className={`max-w-none text-slate-900 leading-relaxed break-words font-sans text-sm ${className}`}
       dangerouslySetInnerHTML={{ __html: renderedHtml }}
     />
   );

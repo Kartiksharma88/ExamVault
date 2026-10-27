@@ -9,8 +9,12 @@ import { AdminPage } from './pages/AdminPage';
 import { AuditorPage } from './pages/AuditorPage';
 import { ImportPage } from './pages/ImportPage';
 import { StatsPage } from './pages/StatsPage';
+import { ReviewerWorkspace } from './pages/ReviewerWorkspace';
+import { ModeratorConsole } from './pages/ModeratorConsole';
+import { AdminPoliciesPage } from './pages/AdminPoliciesPage';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
-import { Shield, Lock } from 'lucide-react';
+import { AuthorFeedbackModal } from './components/AuthorFeedbackModal';
+import { Lock } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,16 +30,15 @@ const MainLayout: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [historyQuestionId, setHistoryQuestionId] = useState<string | null>(null);
+  const [feedbackQuestionId, setFeedbackQuestionId] = useState<string | null>(null);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 p-0.5 animate-pulse">
-          <div className="w-full h-full bg-[#090d16] rounded-2xl flex items-center justify-center">
-            <Shield className="w-6 h-6 text-cyan-400" />
-          </div>
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center space-y-4">
+        <div className="animate-pulse">
+          <img src="/logo.png" alt="ExamVault Logo" className="h-16 w-auto object-contain" />
         </div>
-        <p className="text-sm text-text-secondary font-mono tracking-wide">Initializing secure session...</p>
+        <p className="text-sm text-slate-500 font-mono tracking-wide">Initializing secure cryptographic session...</p>
       </div>
     );
   }
@@ -50,13 +53,17 @@ const MainLayout: React.FC = () => {
       ? 'admin-users'
       : user.role === 'AUDITOR' && currentTab === 'dashboard'
       ? 'audit'
+      : user.role === 'REVIEWER' && currentTab === 'dashboard'
+      ? 'review-queue'
+      : user.role === 'MODERATOR' && currentTab === 'dashboard'
+      ? 'moderator-console'
       : currentTab;
 
   return (
-    <div className="min-h-screen bg-background text-text-primary flex flex-col">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-red-600 selection:text-white">
       <Header currentTab={resolvedTab} onSelectTab={setCurrentTab} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 w-full px-4 sm:px-6 py-6">
         {/* Examiner Tabs */}
         {resolvedTab === 'dashboard' && (
           <ExaminerDashboard
@@ -69,6 +76,7 @@ const MainLayout: React.FC = () => {
               setCurrentTab('editor');
             }}
             onViewHistory={(id) => setHistoryQuestionId(id)}
+            onViewFeedback={(id) => setFeedbackQuestionId(id)}
           />
         )}
 
@@ -90,9 +98,16 @@ const MainLayout: React.FC = () => {
           <ImportPage onSuccess={() => setCurrentTab('dashboard')} />
         )}
 
+        {/* Reviewer Workspace */}
+        {resolvedTab === 'review-queue' && <ReviewerWorkspace />}
+
+        {/* Moderator Console */}
+        {resolvedTab === 'moderator-console' && <ModeratorConsole />}
+
         {/* Admin Tabs */}
         {resolvedTab === 'admin-users' && <AdminPage initialSubTab="users" />}
         {resolvedTab === 'admin-syllabus' && <AdminPage initialSubTab="syllabus" />}
+        {resolvedTab === 'admin-policies' && <AdminPoliciesPage />}
 
         {/* Auditor Tab */}
         {resolvedTab === 'audit' && <AuditorPage />}
@@ -109,15 +124,32 @@ const MainLayout: React.FC = () => {
         />
       )}
 
-      {/* Footer */}
-      <footer className="border-t border-border/80 bg-[#070b12] py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-text-muted gap-2">
+      {/* Author Feedback Modal */}
+      {feedbackQuestionId && (
+        <AuthorFeedbackModal
+          questionId={feedbackQuestionId}
+          onClose={() => setFeedbackQuestionId(null)}
+          onCreateNewVersion={(id) => {
+            setFeedbackQuestionId(null);
+            setEditingQuestionId(id);
+            setCurrentTab('editor');
+          }}
+        />
+      )}
+
+      {/* Institutional Enterprise Footer */}
+      <footer className="border-t border-slate-200 bg-white py-5 mt-auto">
+        <div className="w-full px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-3">
           <div className="flex items-center space-x-2">
-            <Lock className="w-3.5 h-3.5 text-emerald-400" />
-            <span>End-to-End Envelope Encryption (AES-256-GCM + Ed25519)</span>
+            <span className="flex items-center text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono font-medium">
+              <Lock className="w-3 h-3 mr-1" />
+              AES-256-GCM + Ed25519
+            </span>
+            <span>Zero-Knowledge Envelope Encryption & Tamper-Evident Ledger</span>
           </div>
-          <div>
-            <span>ExamVault Research Prototype • Step 1: Question Bank</span>
+          <div className="flex items-center space-x-2">
+            <img src="/logo.png" alt="ExamVault" className="h-4 w-auto object-contain" />
+            <span>• Cryptographic Question Bank Core</span>
           </div>
         </div>
       </footer>

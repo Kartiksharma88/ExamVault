@@ -10,7 +10,7 @@
     "experimentalDecorators": true,
     "declaration": false,
     "declarationMap": false,
-    "incremental": true
+    "noEmit": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

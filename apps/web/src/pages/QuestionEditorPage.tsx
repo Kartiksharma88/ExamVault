@@ -339,9 +339,9 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
   if (loading) {
     return (
-      <div className="py-20 text-center">
-        <div className="inline-block w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p className="text-sm text-text-secondary">Retrieving & decrypting question payload...</p>
+      <div className="py-20 text-center bg-white rounded-2xl border border-slate-200">
+        <div className="inline-block w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-sm text-slate-500">Retrieving & decrypting cryptographic question payload...</p>
       </div>
     );
   }
@@ -349,26 +349,26 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center space-x-3">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-slate-900 border border-border text-text-secondary hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="text-xl font-bold text-slate-900">
                 {isEditing ? `Edit Question: ${existingHumanId}` : 'Author New Exam Question'}
               </h1>
               {isEditing && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-semibold">
                   v{existingVersion} ({existingStatus})
                 </span>
               )}
             </div>
-            <p className="text-xs text-text-secondary mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Markdown + LaTeX supported with live KaTeX rendering & Devanagari Hindi text.
             </p>
           </div>
@@ -380,9 +380,9 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
             <button
               type="button"
               onClick={() => setShowDiff(!showDiff)}
-              className="px-3 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-border text-cyan-300 hover:bg-slate-800 transition-colors flex items-center space-x-1.5"
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors flex items-center space-x-1.5"
             >
-              <History className="w-4 h-4" />
+              <History className="w-4 h-4 text-slate-500" />
               <span>{showDiff ? 'Hide Diff' : 'View Diff'}</span>
             </button>
           )}
@@ -391,9 +391,9 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
             type="button"
             disabled={saving}
             onClick={() => handleSave(false)}
-            className="px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white border border-border transition-colors flex items-center space-x-1.5 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-colors flex items-center space-x-1.5 disabled:opacity-50"
           >
-            <Save className="w-4 h-4 text-text-muted" />
+            <Save className="w-4 h-4 text-slate-500" />
             <span>Save Draft</span>
           </button>
 
@@ -401,7 +401,7 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
             type="button"
             disabled={saving}
             onClick={() => handleSave(true)}
-            className="px-4 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-glow-sm transition-all flex items-center space-x-1.5 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50"
           >
             <Send className="w-4 h-4" />
             <span>{isEditing && existingStatus === 'SUBMITTED' ? 'Submit New Version' : 'Submit Question'}</span>
@@ -410,17 +410,17 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800 flex items-start space-x-3 text-rose-300 text-sm">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-start space-x-3 text-red-800 text-sm">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Version Diff View if toggled */}
       {showDiff && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-white flex items-center space-x-2">
-            <History className="w-4 h-4 text-cyan-400" />
+        <div className="space-y-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+            <History className="w-4 h-4 text-red-600" />
             <span>Diff Against Version {existingVersion}</span>
           </h3>
           <DiffViewer
@@ -435,14 +435,14 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
       {/* Grid: Left Meta + Right Editor */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Metadata & Syllabus */}
-        <div className="glass-card rounded-2xl p-5 border border-border space-y-5 h-fit">
-          <h2 className="text-sm font-semibold text-white uppercase tracking-wider text-xs border-b border-border pb-3">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-5 h-fit">
+          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-3">
             Question Taxonomy & Metadata
           </h2>
 
           {/* Subject */}
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Subject *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Subject *</label>
             <select
               value={subjectId}
               onChange={(e) => {
@@ -450,7 +450,7 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                 setTopicId('');
                 setSubtopicId('');
               }}
-              className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
             >
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -462,14 +462,14 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* Topic */}
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Topic</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Topic</label>
             <select
               value={topicId}
               onChange={(e) => {
                 setTopicId(e.target.value);
                 setSubtopicId('');
               }}
-              className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
             >
               <option value="">-- General Topic --</option>
               {filteredTopics.map((t) => (
@@ -482,11 +482,11 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* Subtopic */}
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Subtopic</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Subtopic</label>
             <select
               value={subtopicId}
               onChange={(e) => setSubtopicId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
             >
               <option value="">-- General Subtopic --</option>
               {filteredSubtopics.map((st) => (
@@ -499,17 +499,17 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* Question Type */}
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Question Type *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Question Type *</label>
             <div className="grid grid-cols-3 gap-2">
               {(['MCQ_SINGLE', 'MCQ_MULTI', 'INTEGER'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setQuestionType(t)}
-                  className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-colors ${
+                  className={`py-2 px-1 text-center rounded-lg text-xs font-semibold transition-all ${
                     questionType === t
-                      ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                      : 'bg-slate-900 text-text-secondary hover:text-white border border-border'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
                   {t.replace('_', ' ')}
@@ -521,8 +521,8 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
           {/* Difficulty */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-text-secondary">Difficulty (0.0 – 1.0)</label>
-              <span className="text-xs font-mono text-cyan-400 font-semibold">{difficulty.toFixed(2)}</span>
+              <label className="text-xs font-semibold text-slate-700">Difficulty (0.0 – 1.0)</label>
+              <span className="text-xs font-mono text-red-600 font-bold">{difficulty.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -531,9 +531,9 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
               step="0.05"
               value={difficulty}
               onChange={(e) => setDifficulty(parseFloat(e.target.value))}
-              className="w-full accent-cyan-500 cursor-pointer"
+              className="w-full accent-red-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-text-muted mt-1">
+            <div className="flex justify-between text-[10px] text-slate-500 mt-1">
               <span>Easy (0.0)</span>
               <span>Medium (0.5)</span>
               <span>Hard (1.0)</span>
@@ -542,11 +542,11 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* Cognitive Level (Bloom) */}
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">Cognitive Level (Bloom)</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Cognitive Level (Bloom)</label>
             <select
               value={cognitiveLevel}
               onChange={(e) => setCognitiveLevel(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
             >
               {['REMEMBER', 'UNDERSTAND', 'APPLY', 'ANALYZE', 'EVALUATE', 'CREATE'].map((lvl) => (
                 <option key={lvl} value={lvl}>
@@ -559,25 +559,25 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
           {/* Marks and Negative Marks */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Marks (+)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Marks (+)</label>
               <input
                 type="number"
                 min="0.5"
                 step="0.5"
                 value={marks}
                 onChange={(e) => setMarks(parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-emerald-700 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Penalty (-)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Penalty (-)</label>
               <input
                 type="number"
                 min="0"
                 step="0.25"
                 value={negativeMarks}
                 onChange={(e) => setNegativeMarks(parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-rose-400 font-mono focus:outline-none focus:ring-1 focus:ring-rose-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-red-600 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
           </div>
@@ -585,22 +585,22 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
           {/* Estimated Time & Language */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Time (Seconds)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Time (Seconds)</label>
               <input
                 type="number"
                 min="10"
                 step="10"
                 value={estimatedTimeSeconds}
                 onChange={(e) => setEstimatedTimeSeconds(parseInt(e.target.value, 10))}
-                className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Language</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Language</label>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600"
               >
                 <option value="EN">English</option>
                 <option value="HI">हिन्दी (Hindi)</option>
@@ -610,30 +610,30 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
           </div>
 
           {/* Image Attachments */}
-          <div className="pt-2 border-t border-border">
-            <label className="block text-xs font-medium text-text-secondary mb-2 flex items-center justify-between">
-              <span>Encrypted Attachments (PNG/JPEG)</span>
-              <span className="text-[10px] text-text-muted">Max 5MB</span>
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center justify-between">
+              <span>Encrypted Attachments</span>
+              <span className="text-[10px] text-slate-500">Max 5MB</span>
             </label>
 
-            <label className="w-full border border-dashed border-border rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 transition-colors bg-slate-900/50">
-              <ImageIcon className="w-5 h-5 text-cyan-400 mb-1" />
-              <span className="text-xs text-text-secondary">Click to upload diagram</span>
+            <label className="w-full border border-dashed border-slate-300 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer hover:border-red-500 transition-colors bg-slate-50/50 hover:bg-red-50/20">
+              <ImageIcon className="w-5 h-5 text-red-600 mb-1" />
+              <span className="text-xs text-slate-600 font-medium">Click to upload diagram</span>
               <input type="file" accept="image/png,image/jpeg" onChange={handleImageUpload} className="hidden" />
             </label>
 
             {imageFiles.length > 0 && (
               <div className="mt-3 space-y-2">
                 {imageFiles.map((img, idx) => (
-                  <div key={img.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-border text-xs">
+                  <div key={img.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 text-xs">
                     <div className="flex items-center space-x-2 truncate">
-                      <img src={img.url} alt="thumbnail" className="w-7 h-7 rounded object-cover border border-border" />
-                      <span className="truncate text-text-secondary">{img.name}</span>
+                      <img src={img.url} alt="thumbnail" className="w-7 h-7 rounded object-cover border border-slate-200" />
+                      <span className="truncate text-slate-700 font-medium">{img.name}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setImageFiles(imageFiles.filter((_, i) => i !== idx))}
-                      className="text-rose-400 hover:text-rose-300 p-1"
+                      className="text-red-600 hover:text-red-700 p-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -647,20 +647,20 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
         {/* Right 2 Columns: Stem, Options, KaTeX Preview */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stem Editor with Live KaTeX Preview */}
-          <div className="glass-card rounded-2xl p-5 border border-border space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2">
-                <FileCode className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-sm font-semibold text-white">Question Stem & Formulas</h2>
+                <FileCode className="w-4 h-4 text-red-600" />
+                <h2 className="text-sm font-bold text-slate-900">Question Stem & Formulas</h2>
               </div>
 
               {/* View mode toggle */}
-              <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-border">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setActiveTab('edit')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    activeTab === 'edit' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-white'
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'edit' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -669,8 +669,8 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('preview')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    activeTab === 'preview' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:text-white'
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'preview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -686,15 +686,15 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                   value={stem}
                   onChange={(e) => setStem(e.target.value)}
                   placeholder="Enter question text with LaTeX formulas, e.g.:&#10;Consider a projectile launched with velocity $v_0$ at angle $\theta$.&#10;The maximum height attained is given by:&#10;$$H = \frac{v_0^2 \sin^2 \theta}{2g}$$&#10;Devanagari text like: किसी प्रक्षेप्य का महत्तम परास ज्ञात कीजिए।"
-                  className="w-full p-3.5 bg-slate-900 border border-border rounded-xl text-sm text-white placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono leading-relaxed resize-y"
+                  className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 font-mono leading-relaxed resize-y"
                 />
-                <p className="text-[11px] text-text-muted mt-1.5">
-                  Use <code className="text-cyan-400">$...$</code> for inline equations and{' '}
-                  <code className="text-cyan-400">$$...$$</code> for centered display equations.
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Use <code className="text-red-600 font-bold">$...$</code> for inline equations and{' '}
+                  <code className="text-red-600 font-bold">$$...$$</code> for centered display equations.
                 </p>
               </div>
             ) : (
-              <div className="p-4 bg-slate-950/80 rounded-xl border border-border min-h-[190px]">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 min-h-[190px]">
                 <KaTeXPreview content={stem} />
               </div>
             )}
@@ -702,11 +702,11 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* Options (For MCQ types) or Integer Answer */}
           {(questionType === 'MCQ_SINGLE' || questionType === 'MCQ_MULTI') && (
-            <div className="glass-card rounded-2xl p-5 border border-border space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">Answer Options</h2>
-                  <p className="text-xs text-text-muted mt-0.5">
+                  <h2 className="text-sm font-bold text-slate-900">Answer Options</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {questionType === 'MCQ_SINGLE'
                       ? 'Select one radio button to mark as the correct answer.'
                       : 'Check all checkboxes that represent correct options.'}
@@ -717,7 +717,7 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                   <button
                     type="button"
                     onClick={handleAddOption}
-                    className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-border transition-colors"
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-red-600 border border-slate-200 shadow-2xs transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Option</span>
@@ -735,10 +735,10 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                   return (
                     <div
                       key={opt.label}
-                      className={`flex items-start space-x-3 p-3 rounded-xl border transition-all ${
+                      className={`flex items-start space-x-3 p-3.5 rounded-xl border transition-all ${
                         isCorrect
-                          ? 'bg-emerald-950/20 border-emerald-500/50'
-                          : 'bg-slate-900/60 border-border hover:border-slate-700'
+                          ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-300/50'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
                       {/* Radio or Checkbox */}
@@ -753,8 +753,8 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                         }}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs font-mono transition-colors flex-shrink-0 mt-0.5 ${
                           isCorrect
-                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                            : 'bg-slate-800 text-text-secondary hover:text-white border border-border'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                         }`}
                       >
                         {opt.label}
@@ -767,10 +767,10 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                           value={opt.text}
                           onChange={(e) => handleOptionTextChange(idx, e.target.value)}
                           placeholder={`Option ${opt.label} text or LaTeX formula, e.g. $\\frac{h}{2}$`}
-                          className="w-full px-3 py-1.5 bg-slate-950 border border-border rounded-lg text-sm text-white placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-red-600"
                         />
                         {opt.text && opt.text.includes('$') && (
-                          <div className="text-xs px-2 py-1 rounded bg-slate-900/80">
+                          <div className="text-xs px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200">
                             <KaTeXPreview content={opt.text} />
                           </div>
                         )}
@@ -781,7 +781,7 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveOption(idx)}
-                          className="text-text-muted hover:text-rose-400 p-1.5 rounded-lg transition-colors flex-shrink-0"
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg transition-colors flex-shrink-0"
                           title="Remove option"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -796,13 +796,13 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
 
           {/* INTEGER Type Answer */}
           {questionType === 'INTEGER' && (
-            <div className="glass-card rounded-2xl p-5 border border-border space-y-4">
-              <h2 className="text-sm font-semibold text-white border-b border-border pb-3">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3">
                 Integer Numerical Answer
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Correct Value (Integer) *
                   </label>
                   <input
@@ -810,11 +810,11 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                     step="1"
                     value={correctInteger}
                     onChange={(e) => setCorrectInteger(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-emerald-700 font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Tolerance (Default 0)
                   </label>
                   <input
@@ -823,7 +823,7 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                     step="1"
                     value={tolerance}
                     onChange={(e) => setTolerance(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-border rounded-xl text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-red-600"
                   />
                 </div>
               </div>
@@ -831,21 +831,21 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
           )}
 
           {/* Optional Explanation / Solution */}
-          <div className="glass-card rounded-2xl p-5 border border-border space-y-3">
-            <div className="flex items-center space-x-2 border-b border-border pb-3">
-              <HelpCircle className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold text-white">Solution & Explanation (Optional)</h2>
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+              <HelpCircle className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-sm font-bold text-slate-900">Solution & Explanation (Optional)</h2>
             </div>
             <textarea
               rows={4}
               value={solution}
               onChange={(e) => setSolution(e.target.value)}
               placeholder="Step-by-step solution and derivation with formulas..."
-              className="w-full p-3.5 bg-slate-900 border border-border rounded-xl text-sm text-white placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono leading-relaxed resize-y"
+              className="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 font-mono leading-relaxed resize-y"
             />
             {solution && (
-              <div className="p-3 bg-slate-950 rounded-xl border border-border">
-                <span className="text-[10px] uppercase text-text-muted font-semibold block mb-1">Preview</span>
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Preview</span>
                 <KaTeXPreview content={solution} />
               </div>
             )}

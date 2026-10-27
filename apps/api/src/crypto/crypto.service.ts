@@ -151,4 +151,25 @@ export class CryptoService {
   async verify(data: Buffer, signature: Buffer): Promise<boolean> {
     return this.keyProvider.verify(data, signature);
   }
+
+  /**
+   * Generate an Ed25519 signing keypair for a user and wrap the private key with the master key
+   */
+  async generateUserSigningKey(): Promise<{
+    publicKey: string;
+    wrappedPrivateKey: Buffer;
+    keyId: string;
+  }> {
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+    const privateKeyDer = privateKey.export({ format: 'der', type: 'pkcs8' });
+    const publicKeyDer = publicKey.export({ format: 'der', type: 'spki' });
+
+    const wrappedPrivateKey = await this.keyProvider.wrapKey(privateKeyDer);
+    return {
+      publicKey: publicKeyDer.toString('base64'),
+      wrappedPrivateKey,
+      keyId: this.keyProvider.getKeyId(),
+    };
+  }
 }
+

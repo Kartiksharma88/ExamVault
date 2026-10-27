@@ -56,7 +56,7 @@ export class QuestionsController {
   }
 
   @Get()
-  @Roles('EXAMINER', 'REVIEWER', 'ADMIN', 'AUDITOR')
+  @Roles('EXAMINER', 'REVIEWER', 'MODERATOR', 'ADMIN', 'AUDITOR')
   @ApiOperation({ summary: 'List questions — metadata only, filtered by role' })
   @ApiQuery({ name: 'subjectId', required: false })
   @ApiQuery({ name: 'status', required: false })
@@ -86,7 +86,7 @@ export class QuestionsController {
   }
 
   @Get(':id/content')
-  @Roles('EXAMINER', 'REVIEWER')
+  @Roles('EXAMINER', 'REVIEWER', 'MODERATOR')
   @ApiOperation({ summary: 'Get decrypted question content — ADMIN and AUDITOR get 403' })
   @ApiQuery({ name: 'version', required: false, type: Number })
   async getContent(
@@ -104,7 +104,7 @@ export class QuestionsController {
   }
 
   @Get(':id/versions')
-  @Roles('EXAMINER', 'REVIEWER')
+  @Roles('EXAMINER', 'REVIEWER', 'MODERATOR')
   @ApiOperation({ summary: 'Get version history for a question' })
   async getVersionHistory(
     @Param('id') id: string,
@@ -117,4 +117,33 @@ export class QuestionsController {
     );
     return { success: true, data: result };
   }
+
+  @Get(':id/feedback')
+  @Roles('EXAMINER')
+  @ApiOperation({ summary: 'Get anonymized reviewer feedback for an author' })
+  async getFeedback(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const result = await this.questionsService.getAuthorFeedback(
+      id,
+      req.userId!,
+    );
+    return { success: true, data: result };
+  }
+
+  @Post('new-version')
+  @Roles('EXAMINER')
+  @ApiOperation({ summary: 'Create a new draft version from an approved or changes-requested question' })
+  async createNewVersion(
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const result = await this.questionsService.createNewVersion(
+      body,
+      req.userId!,
+    );
+    return { success: true, data: result };
+  }
 }
+
