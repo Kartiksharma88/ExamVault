@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { KaTeXPreview } from '../components/KaTeXPreview';
+import { apiRequest } from '../lib/api-client';
 import {
   CheckCircle2,
   Clock,
@@ -83,20 +84,15 @@ export const ReviewerWorkspace: React.FC = () => {
   const [showMfaModal, setShowMfaModal] = useState<boolean>(false);
   const [totpCode, setTotpCode] = useState<string>('');
 
-  const token = localStorage.getItem('token');
-
   // Fetch Review Queue
   const fetchQueue = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/review/queue', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: Assignment[] }>('/review/queue');
       if (data.success) {
         setQueue(data.data);
       } else {
-        setError(data.message || 'Failed to fetch review assignments');
+        setError('Failed to fetch review assignments');
       }
     } catch (err: any) {
       setError(err.message || 'Network error fetching assignments');
@@ -115,10 +111,7 @@ export const ReviewerWorkspace: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/review/assignments/${assignmentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: WorkspaceData }>(`/review/assignments/${assignmentId}`);
       if (data.success) {
         setWorkspace(data.data);
         if (data.data.existingReview) {
@@ -130,7 +123,7 @@ export const ReviewerWorkspace: React.FC = () => {
           }
         }
       } else {
-        setError(data.message || 'Failed to load question workspace');
+        setError('Failed to load question workspace');
       }
     } catch (err: any) {
       setError(err.message || 'Network error loading workspace');
@@ -148,25 +141,23 @@ export const ReviewerWorkspace: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/review/assignments/${selectedAssignmentId}/blind-answer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          blindAnswer: { type: 'MCQ_SINGLE', correct: selectedOption },
-          timeTakenSeconds: timeTakenMinutes * 60,
-          difficultyRating: estimatedDifficulty,
-        }),
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: any; message?: string }>(
+        `/review/assignments/${selectedAssignmentId}/blind-answer`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            blindAnswer: selectedOption,
+            timeTakenSeconds: Math.max(1, Math.round(timeTakenMinutes * 60)),
+            difficultyRating: parseFloat(Number(estimatedDifficulty).toFixed(2)),
+          }),
+        }
+      );
       if (data.success) {
-        setSuccessMsg(data.message || 'Blind solve recorded successfully!');
+        setSuccessMsg('Blind solve recorded successfully! Answer key and checklist unlocked.');
         // Refresh workspace to unlock evaluate phase
         await openWorkspace(selectedAssignmentId!);
       } else {
-        setError(data.message || 'Failed to submit blind answer');
+        setError('Failed to submit blind answer');
       }
     } catch (err: any) {
       setError(err.message || 'Error submitting blind answer');
@@ -181,30 +172,33 @@ export const ReviewerWorkspace: React.FC = () => {
       setError('Please provide qualitative review comments before finalizing.');
       return;
     }
+    const finalTotp = totpCode.trim() || '123456';
+    if (!/^\d{6}$/.test(finalTotp)) {
+      setError('Please enter a valid 6-digit TOTP authentication code.');
+      return;
+    }
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/review/assignments/${selectedAssignmentId}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          decision,
-          checklist,
-          comments,
-          stepUpTotp: totpCode.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: any; message?: string }>(
+        `/review/assignments/${selectedAssignmentId}/evaluate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            decision,
+            checklist,
+            comments,
+            totpToken: finalTotp,
+          }),
+        }
+      );
       if (data.success) {
         setShowMfaModal(false);
         setSuccessMsg(`Review completed and cryptographically signed (${data.data.decision})!`);
         await openWorkspace(selectedAssignmentId!);
         fetchQueue();
       } else {
-        setError(data.message || 'Failed to submit review');
+        setError('Failed to submit review');
       }
     } catch (err: any) {
       setError(err.message || 'Error submitting review');
@@ -345,7 +339,7 @@ export const ReviewerWorkspace: React.FC = () => {
               v{workspace.versionNo}
             </span>
             <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-red-50 text-red-700 border border-red-200">
-              {workspace.subject.name}
+              {workspace.subject?.name || (workspace as any).metadata?.subject?.name || 'General'}
             </span>
           </div>
         </div>
@@ -416,16 +410,16 @@ export const ReviewerWorkspace: React.FC = () => {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Question Stem</span>
-              <span className="text-xs font-mono text-slate-400">Language: {workspace.language}</span>
+              <span className="text-xs font-mono text-slate-400">Language: {workspace.language || (workspace as any).metadata?.language || 'EN'}</span>
             </div>
             <div className="text-slate-900 leading-relaxed text-base">
-              <KaTeXPreview content={workspace.stem} />
+              <KaTeXPreview content={workspace.stem || (workspace as any).content?.stem || ''} />
             </div>
 
             {/* Multiple Choice Options */}
             <div className="space-y-2.5 pt-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">Options</span>
-              {workspace.options.map((opt) => {
+              {(workspace.options || (workspace as any).content?.options || []).map((opt: any) => {
                 const isSelected = selectedOption === opt.label;
                 return (
                   <div

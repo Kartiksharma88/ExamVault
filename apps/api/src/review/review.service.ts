@@ -302,8 +302,19 @@ export class ReviewService {
     }
 
     const version = assignment.questionVersion;
-    const review = assignment.review;
-    const isSolvePhase = !review || review.phase === 'SOLVE';
+    let review = assignment.review;
+    if (!review) {
+      review = await this.prisma.review.create({
+        data: {
+          assignmentId: assignment.id,
+          questionVersionId: version.id,
+          reviewerId: assignment.reviewerId,
+          phase: 'SOLVE',
+          contentCommitment: version.contentCommitment,
+        },
+      });
+    }
+    const isSolvePhase = review.phase === 'SOLVE';
 
     // Decrypt content inside API
     const associatedData = `${version.questionId}:${version.versionNo}`;
@@ -377,6 +388,19 @@ export class ReviewService {
       metadata: { phase: review?.phase ?? 'SOLVE', versionNo: version.versionNo },
     });
 
+    const existingReview = review
+      ? {
+          blindAnswer: review.encryptedBlindAnswer ? 'SUBMITTED' : null,
+          timeTakenSeconds: review.timeTakenSeconds,
+          difficultyRating: review.difficultyRating,
+          blindAnswerMatchesKey: review.blindAnswerMatchesKey,
+          disagreementFlag: review.disagreementFlag,
+          decision: review.decision,
+          checklist: review.checklist,
+          comments: null,
+        }
+      : null;
+
     return {
       assignmentId: assignment.id,
       questionId: version.questionId,
@@ -386,8 +410,19 @@ export class ReviewService {
       phase: review?.phase ?? 'SOLVE',
       dueDate: assignment.dueDate,
       content,
+      stem: content.stem,
+      options: content.options || [],
+      solution: content.solution,
       answerKey, // null if SOLVE phase!
       parentDiff,
+      subject: version.question.subject,
+      topic: version.question.topic,
+      difficulty: version.question.difficulty,
+      cognitiveLevel: version.question.cognitiveLevel,
+      marks: version.question.marks,
+      negativeMarks: version.question.negativeMarks,
+      language: version.question.language,
+      existingReview,
       review: review
         ? {
             id: review.id,
@@ -438,9 +473,17 @@ export class ReviewService {
       throw new ForbiddenException('A user can never review a question version they authored');
     }
 
-    const review = assignment.review;
+    let review = assignment.review;
     if (!review) {
-      throw new NotFoundException('Review record not found');
+      review = await this.prisma.review.create({
+        data: {
+          assignmentId: assignment.id,
+          questionVersionId: assignment.questionVersion.id,
+          reviewerId: assignment.reviewerId,
+          phase: 'SOLVE',
+          contentCommitment: assignment.questionVersion.contentCommitment,
+        },
+      });
     }
 
     if (review.phase !== 'SOLVE') {

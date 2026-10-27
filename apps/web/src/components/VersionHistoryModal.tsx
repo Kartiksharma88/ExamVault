@@ -38,10 +38,15 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
         const res = await apiRequest<{ success: boolean; data: VersionItem[] }>(
           `/questions/${questionId}/versions`,
         );
-        const list = res.data || [];
+        const rawData = res.data as any;
+        const list: VersionItem[] = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.versions)
+          ? rawData.versions
+          : [];
         setVersions(list);
         if (list.length > 0) {
-          loadVersionContent(list[list.length - 1].versionNo);
+          loadVersionContent(list[0].versionNo);
         }
       } catch (err) {
         console.error('Failed to load version history:', err);
@@ -110,7 +115,12 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                   Version Timeline
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {versions.map((ver) => {
+                  {(!Array.isArray(versions) || versions.length === 0) && (
+                    <div className="col-span-full py-4 text-center text-xs text-slate-400">
+                      No versions found for this question.
+                    </div>
+                  )}
+                  {Array.isArray(versions) && versions.map((ver) => {
                     const isSelected = selectedVersion === ver.versionNo;
                     return (
                       <div

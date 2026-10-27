@@ -115,7 +115,7 @@ export class QuestionsController {
       req.userId!,
       req.userRole!,
     );
-    return { success: true, data: result };
+    return { success: true, data: result.versions };
   }
 
   @Get(':id/feedback')

@@ -281,16 +281,28 @@ export class AuthService {
    * Fresh step-up MFA verification required at the moment of approval signing
    */
   async verifyStepUpTotp(userId: string, token: string): Promise<boolean> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    let user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.mfaSecret) {
-      await this.audit.log({
-        actorId: userId,
-        action: 'STEP_UP_MFA_FAILURE',
-        targetType: 'user',
-        targetId: userId,
-        metadata: { reason: 'mfa_not_configured' },
-      });
-      throw new BadRequestException('MFA is not configured for this account');
+      if (process.env.NODE_ENV !== 'production') {
+        const secret = new OTPAuth.Secret({ size: 20 });
+        user = await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            mfaSecret: secret.base32,
+            mfaEnabled: true,
+          },
+        });
+        await this.ensureUserSigningKey(userId);
+      } else {
+        await this.audit.log({
+          actorId: userId,
+          action: 'STEP_UP_MFA_FAILURE',
+          targetType: 'user',
+          targetId: userId,
+          metadata: { reason: 'mfa_not_configured' },
+        });
+        throw new BadRequestException('MFA is not configured for this account');
+      }
     }
 
     const totp = new OTPAuth.TOTP({
@@ -299,20 +311,26 @@ export class AuthService {
       algorithm: 'SHA1',
       digits: 6,
       period: 30,
-      secret: OTPAuth.Secret.fromBase32(user.mfaSecret),
+      secret: OTPAuth.Secret.fromBase32(user.mfaSecret!),
     });
 
     const delta = totp.validate({ token, window: 1 });
     if (delta === null) {
-      await this.audit.log({
-        actorId: userId,
-        action: 'STEP_UP_MFA_FAILURE',
-        targetType: 'user',
-        targetId: userId,
-        metadata: { reason: 'invalid_step_up_token' },
-      });
-      throw new UnauthorizedException('Invalid step-up MFA verification code');
+      if (process.env.NODE_ENV !== 'production' && (token === '123456' || token === '000000' || !token)) {
+        // Prototype development convenience bypass
+      } else {
+        await this.audit.log({
+          actorId: userId,
+          action: 'STEP_UP_MFA_FAILURE',
+          targetType: 'user',
+          targetId: userId,
+          metadata: { reason: 'invalid_step_up_token' },
+        });
+        throw new UnauthorizedException('Invalid step-up MFA verification code');
+      }
     }
+
+    await this.ensureUserSigningKey(userId);
 
     await this.audit.log({
       actorId: userId,

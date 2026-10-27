@@ -29,6 +29,14 @@ export class ModerationController {
     return { success: true, data: queue };
   }
 
+  @Get('duplicates')
+  @Roles('MODERATOR', 'ADMIN')
+  @ApiOperation({ summary: 'Get duplicate flagged question versions' })
+  async getDuplicates() {
+    const queue = await this.moderationService.getModeratorQueue();
+    return { success: true, data: queue.duplicateFlags };
+  }
+
   @Post('disagreement/:reviewId/resolve')
   @Roles('MODERATOR')
   @ApiOperation({ summary: 'Resolve a blind-solve answer key disagreement' })

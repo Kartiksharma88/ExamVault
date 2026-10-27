@@ -89,13 +89,13 @@ All accounts require mandatory TOTP MFA enrollment at first login:
 
 | Role | Email | Password | Allowed Capabilities |
 |------|-------|----------|----------------------|
-| **ADMIN (1)** | `admin@examvault.local` | `Admin123!@#$` | Manage users, syllabus, propose approval policies, import reference corpora. **403 Forbidden** on question content. |
-| **ADMIN (2)** | `admin2@examvault.local` | `Admin123!@#$` | Dual-control policy approver (`proposerId !== approverId`). **403 Forbidden** on question content. |
-| **MODERATOR (1)** | `moderator1@examvault.local` | `Moderator123!@#$` | 5-tab console: duplicate flags, disagreements, ready for approval, overdue, staffing warnings; final sign-off. |
-| **MODERATOR (2)** | `moderator2@examvault.local` | `Moderator123!@#$` | Independent moderator for reassignments and retirements. |
-| **REVIEWER (1–6)** | `reviewer1@examvault.local` ... `reviewer6@examvault.local` | `Reviewer123!@#$` | Two-step workspace: blind solve then evaluate; Ed25519 digital signing with step-up MFA. |
-| **EXAMINER (1–3)** | `examiner1@examvault.local` ... `examiner3@examvault.local` | `Examiner123!@#$` | Author questions, view double-blind feedback timelines, create revisions with change justification. |
-| **AUDITOR** | `auditor@examvault.local` | `Auditor123!@#$` | Verify cryptographic audit chain and approval signatures (`/audit/approvals/verify`). **403 Forbidden** on question content. |
+| **ADMIN (1)** | `admin@examvault.local` | `Admin@ExamVault2024!` | Manage users, syllabus, propose approval policies, import reference corpora. **403 Forbidden** on question content. |
+| **ADMIN (2)** | `admin2@examvault.local` | `Admin@ExamVault2024!` | Dual-control policy approver (`proposerId !== approverId`). **403 Forbidden** on question content. |
+| **MODERATOR (1)** | `moderator1@examvault.local` | `Examiner@2024!pass` | 5-tab console: duplicate flags, disagreements, ready for approval, overdue, staffing warnings; final sign-off. |
+| **MODERATOR (2)** | `moderator2@examvault.local` | `Examiner@2024!pass` | Independent moderator for reassignments and retirements. |
+| **REVIEWER (1–6)** | `reviewer1@examvault.local` ... `reviewer6@examvault.local` | `Examiner@2024!pass` | Two-step workspace: blind solve then evaluate; Ed25519 digital signing with step-up MFA. |
+| **EXAMINER (1–3)** | `examiner1@examvault.local` ... `examiner3@examvault.local` | `Examiner@2024!pass` | Author questions, view double-blind feedback timelines, create revisions with change justification. |
+| **AUDITOR** | `auditor@examvault.local` | `Examiner@2024!pass` | Verify cryptographic audit chain and approval signatures (`/audit/approvals/verify`). **403 Forbidden** on question content. |
 
 ---
 

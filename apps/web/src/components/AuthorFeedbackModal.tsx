@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../lib/api-client';
 import {
   X,
   CheckCircle2,
@@ -30,20 +31,15 @@ export const AuthorFeedbackModal: React.FC<AuthorFeedbackModalProps> = ({
   const [submittingVersion, setSubmittingVersion] = useState<boolean>(false);
   const [versionSuccessMsg, setVersionSuccessMsg] = useState<string | null>(null);
 
-  const token = localStorage.getItem('token');
-
   useEffect(() => {
     const fetchFeedback = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/questions/${questionId}/feedback`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const resData = await res.json();
+        const resData = await apiRequest<{ success: boolean; data: any }>(`/questions/${questionId}/feedback`);
         if (resData.success) {
           setData(resData.data);
         } else {
-          setError(resData.message || 'Failed to load feedback');
+          setError('Failed to load feedback');
         }
       } catch (err: any) {
         setError(err.message || 'Network error fetching feedback');
@@ -62,18 +58,13 @@ export const AuthorFeedbackModal: React.FC<AuthorFeedbackModalProps> = ({
     setSubmittingVersion(true);
     setError(null);
     try {
-      const res = await fetch('/api/questions/new-version', {
+      const resData = await apiRequest<{ success: boolean; data: any }>('/questions/new-version', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           parentVersionId: data.versionId,
           changeJustification,
         }),
       });
-      const resData = await res.json();
       if (resData.success) {
         setVersionSuccessMsg(`New version created (v${resData.data.versionNo}) in DRAFT!`);
         setIsCreatingVersion(false);
@@ -83,7 +74,7 @@ export const AuthorFeedbackModal: React.FC<AuthorFeedbackModalProps> = ({
           }, 1000);
         }
       } else {
-        setError(resData.message || 'Failed to create revision');
+        setError('Failed to create revision');
       }
     } catch (err: any) {
       setError(err.message || 'Error creating new version');

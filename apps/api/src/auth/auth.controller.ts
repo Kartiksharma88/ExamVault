@@ -109,6 +109,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@Req() req: Request) {
     const user = await this.authService.getProfile(req.userId!);
-    return { success: true, data: user };
+    return {
+      success: true,
+      data: {
+        ...user,
+        csrfToken: (req as any).csrfToken,
+      },
+    };
   }
 }

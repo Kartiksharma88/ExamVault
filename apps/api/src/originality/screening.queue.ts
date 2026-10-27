@@ -34,6 +34,9 @@ export class ScreeningQueue implements OnModuleInit, OnModuleDestroy {
         });
 
         await this.boss.start();
+        try {
+          await this.boss.createQueue('screen-question');
+        } catch (e) {}
         await this.boss.work('screen-question', async (job: any) => {
           const { versionId } = job.data;
           this.logger.log(`Processing screening job for version: ${versionId}`);

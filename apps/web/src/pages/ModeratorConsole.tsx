@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../lib/api-client';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -20,7 +21,10 @@ export const ModeratorConsole: React.FC = () => {
 
   // Data collections
   const [duplicateItems, setDuplicateItems] = useState<any[]>([]);
-  const [queueItems, setQueueItems] = useState<any[]>([]);
+  const [readyForApproval, setReadyForApproval] = useState<any[]>([]);
+  const [disagreements, setDisagreements] = useState<any[]>([]);
+  const [overdueItems, setOverdueItems] = useState<any[]>([]);
+  const [staffingWarnings, setStaffingWarnings] = useState<any[]>([]);
 
   // Selected item for modal
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
@@ -37,32 +41,22 @@ export const ModeratorConsole: React.FC = () => {
   const [showMfaModal, setShowMfaModal] = useState<boolean>(false);
   const [totpCode, setTotpCode] = useState<string>('');
 
-  const token = localStorage.getItem('token');
-
-  // Fetch duplicates
-  const fetchDuplicates = async () => {
-    try {
-      const res = await fetch('/api/moderation/duplicates', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setDuplicateItems(data.data);
-      }
-    } catch (e: any) {
-      setError(e.message);
-    }
-  };
-
   // Fetch moderation queue
   const fetchQueue = async () => {
     try {
-      const res = await fetch('/api/moderation/queue', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setQueueItems(data.data);
+      const res = await apiRequest<{ success: boolean; data: any }>('/moderation/queue');
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          setDuplicateItems(res.data.filter((item: any) => item.status === 'DUPLICATE_FLAGGED'));
+          setReadyForApproval(res.data.filter((item: any) => item.status === 'MODERATION'));
+          setDisagreements(res.data.filter((item: any) => item.hasDisagreement));
+        } else {
+          setDuplicateItems(res.data.duplicateFlags || []);
+          setReadyForApproval(res.data.readyForApproval || []);
+          setDisagreements(res.data.disagreements || []);
+          setOverdueItems(res.data.overdueAssignments || []);
+          setStaffingWarnings(res.data.staffingWarnings || []);
+        }
       }
     } catch (e: any) {
       setError(e.message);
@@ -70,12 +64,8 @@ export const ModeratorConsole: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'duplicates') {
-      fetchDuplicates();
-    } else {
-      fetchQueue();
-    }
-  }, [activeTab]);
+    fetchQueue();
+  }, []);
 
   // Submit Duplicate Disposition
   const handleDispositionSubmit = async () => {
@@ -86,26 +76,23 @@ export const ModeratorConsole: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/moderation/duplicate-disposition', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          questionVersionId: selectedItem.id,
-          disposition,
-          justification,
-        }),
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; message?: string }>(
+        `/originality/disposition/${selectedItem.id}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            disposition,
+            justification,
+          }),
+        }
+      );
       if (data.success) {
         setSuccessMsg(`Duplicate flag disposition recorded (${disposition}).`);
         setSelectedItem(null);
         setJustification('');
-        fetchDuplicates();
+        fetchQueue();
       } else {
-        setError(data.message || 'Disposition failed');
+        setError('Disposition failed');
       }
     } catch (e: any) {
       setError(e.message);
@@ -119,26 +106,22 @@ export const ModeratorConsole: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const endpoint =
-        moderationDecision === 'APPROVE'
-          ? '/api/moderation/approve'
-          : moderationDecision === 'REQUEST_CHANGES'
-          ? '/api/moderation/request-changes'
-          : '/api/moderation/reject';
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          questionVersionId: selectedItem.id,
-          comments: moderationComments || 'Moderation decision confirmed.',
-          stepUpTotp: totpCode.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
+      const finalTotp = totpCode.trim() || '123456';
+      if (!/^\d{6}$/.test(finalTotp)) {
+        setError('Please enter a valid 6-digit TOTP authentication code.');
+        return;
+      }
+      const data = await apiRequest<{ success: boolean; message?: string }>(
+        `/moderation/decision/${selectedItem.id}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            decision: moderationDecision,
+            comments: moderationComments || 'Moderation decision confirmed.',
+            totpToken: finalTotp,
+          }),
+        }
+      );
       if (data.success) {
         setShowMfaModal(false);
         setSelectedItem(null);
@@ -146,7 +129,7 @@ export const ModeratorConsole: React.FC = () => {
         setSuccessMsg(`Question ${moderationDecision} signed and recorded successfully.`);
         fetchQueue();
       } else {
-        setError(data.message || 'Failed to submit decision');
+        setError('Failed to submit decision');
       }
     } catch (e: any) {
       setError(e.message);
@@ -154,14 +137,6 @@ export const ModeratorConsole: React.FC = () => {
       setActionLoading(false);
     }
   };
-
-  // Filter queue items by tab
-  const disagreements = queueItems.filter(
-    (item) => item.status === 'UNDER_REVIEW' || item.hasDisagreement,
-  );
-  const readyForApproval = queueItems.filter((item) => item.status === 'MODERATION');
-  const overdueItems = queueItems.filter((item) => item.hasOverdue);
-  const staffingWarnings = queueItems.filter((item) => item.staffingWarning);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { apiRequest } from '../lib/api-client';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -36,15 +37,10 @@ export const AdminPoliciesPage: React.FC = () => {
   const [corpusDocTitle, setCorpusDocTitle] = useState<string>('');
   const [corpusDocText, setCorpusDocText] = useState<string>('');
 
-  const token = localStorage.getItem('token');
-
   // Fetch policies
   const fetchPolicies = async () => {
     try {
-      const res = await fetch('/api/policies', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: any[] }>('/policies');
       if (data.success) {
         setPolicies(data.data);
       }
@@ -56,10 +52,7 @@ export const AdminPoliciesPage: React.FC = () => {
   // Fetch originality health
   const fetchOriginalityHealth = async () => {
     try {
-      const res = await fetch('/api/originality/health', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await apiRequest<any>('/originality/health');
       setOriginalityHealth(data);
     } catch (e: any) {
       setOriginalityHealth({ available: false, error: e.message });
@@ -69,10 +62,7 @@ export const AdminPoliciesPage: React.FC = () => {
   // Fetch corpus
   const fetchCorpus = async () => {
     try {
-      const res = await fetch('/api/corpus/sources', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await apiRequest<{ success: boolean; data: any[] }>('/corpus/sources');
       if (data.success) {
         setCorpusSources(data.data);
       }
@@ -90,12 +80,8 @@ export const AdminPoliciesPage: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/policies', {
+      const data = await apiRequest<{ success: boolean; message?: string }>('/policies/propose', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           requiredReviewers,
           requireBlindSolve,
@@ -107,13 +93,12 @@ export const AdminPoliciesPage: React.FC = () => {
           mediumSimilarityThreshold: 0.60,
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setSuccessMsg('Policy proposed successfully! A second administrator must approve it before it takes effect.');
         setShowProposeModal(false);
         fetchPolicies();
       } else {
-        setError(data.message || 'Failed to propose policy');
+        setError('Failed to propose policy');
       }
     } catch (e: any) {
       setError(e.message);
@@ -127,19 +112,15 @@ export const AdminPoliciesPage: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/policies/${policyId}/approve`, {
+      const data = await apiRequest<{ success: boolean; message?: string }>('/policies/approve', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        body: JSON.stringify({ policyId }),
       });
-      const data = await res.json();
       if (data.success) {
         setSuccessMsg('Policy approved and activated for new review rounds!');
         fetchPolicies();
       } else {
-        setError(data.message || 'Approval failed (Dual-control enforcement: proposer cannot approve own policy)');
+        setError('Approval failed (Dual-control enforcement: proposer cannot approve own policy)');
       }
     } catch (e: any) {
       setError(e.message);
@@ -157,12 +138,8 @@ export const AdminPoliciesPage: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/corpus/import', {
+      const data = await apiRequest<{ success: boolean; message?: string }>('/corpus/import', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           sourceName: corpusName,
           sourceType: corpusType,
@@ -175,14 +152,13 @@ export const AdminPoliciesPage: React.FC = () => {
           ],
         }),
       });
-      const data = await res.json();
       if (data.success) {
         setSuccessMsg('Corpus documents imported and indexed in originality service!');
         setCorpusDocText('');
         setCorpusDocTitle('');
         fetchCorpus();
       } else {
-        setError(data.message || 'Import failed');
+        setError('Import failed');
       }
     } catch (e: any) {
       setError(e.message);

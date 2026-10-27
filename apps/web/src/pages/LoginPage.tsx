@@ -207,11 +207,11 @@ export const LoginPage: React.FC = () => {
             <p className="text-[11px] font-mono uppercase text-slate-400 text-center mb-2 tracking-wide">
               Quick Test Credentials
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-5 gap-1.5">
               <button
                 type="button"
                 onClick={() => fillQuickCreds('admin@examvault.local', 'Admin@ExamVault2024!')}
-                className="px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium"
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
                 title="admin@examvault.local / Admin@ExamVault2024!"
               >
                 Admin
@@ -219,15 +219,31 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => fillQuickCreds('examiner1@examvault.local', 'Examiner@2024!pass')}
-                className="px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium"
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
                 title="examiner1@examvault.local / Examiner@2024!pass"
               >
                 Examiner
               </button>
               <button
                 type="button"
+                onClick={() => fillQuickCreds('reviewer1@examvault.local', 'Examiner@2024!pass')}
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
+                title="reviewer1@examvault.local / Examiner@2024!pass"
+              >
+                Reviewer
+              </button>
+              <button
+                type="button"
+                onClick={() => fillQuickCreds('moderator1@examvault.local', 'Examiner@2024!pass')}
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
+                title="moderator1@examvault.local / Examiner@2024!pass"
+              >
+                Moderator
+              </button>
+              <button
+                type="button"
                 onClick={() => fillQuickCreds('auditor@examvault.local', 'Examiner@2024!pass')}
-                className="px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium"
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
                 title="auditor@examvault.local / Examiner@2024!pass"
               >
                 Auditor

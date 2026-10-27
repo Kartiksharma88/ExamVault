@@ -36,9 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = async () => {
     try {
-      const res = await apiRequest<{ success: boolean; data: User }>('/auth/me');
+      const res = await apiRequest<{ success: boolean; data: User & { csrfToken?: string } }>('/auth/me');
       if (res.data) {
         setUser(res.data);
+        if (res.data.csrfToken) {
+          setCsrfToken(res.data.csrfToken);
+        }
         setMfaPending(null);
       }
     } catch {
@@ -111,10 +114,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const verifyMfa = async (token: string) => {
-    await apiRequest('/auth/mfa/verify', {
+    const res = await apiRequest<{ success: boolean; data?: { csrfToken?: string } }>('/auth/mfa/verify', {
       method: 'POST',
       body: JSON.stringify({ token }),
     });
+
+    if (res.data?.csrfToken) {
+      setCsrfToken(res.data.csrfToken);
+    }
 
     setMfaPending(null);
     await refreshProfile();

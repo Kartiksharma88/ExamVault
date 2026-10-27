@@ -1,17 +1,26 @@
 const BASE_URL = '/api';
 
-let csrfToken: string | null = sessionStorage.getItem('examvault_csrf');
+let csrfToken: string | null =
+  (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('examvault_csrf') : null) ||
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('examvault_csrf') : null);
 
 export function setCsrfToken(token: string | null) {
   csrfToken = token;
   if (token) {
-    sessionStorage.setItem('examvault_csrf', token);
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('examvault_csrf', token);
+    if (typeof localStorage !== 'undefined') localStorage.setItem('examvault_csrf', token);
   } else {
-    sessionStorage.removeItem('examvault_csrf');
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('examvault_csrf');
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('examvault_csrf');
   }
 }
 
 export function getCsrfToken(): string | null {
+  if (!csrfToken) {
+    csrfToken =
+      (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('examvault_csrf') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('examvault_csrf') : null);
+  }
   return csrfToken;
 }
 
@@ -54,9 +63,15 @@ export async function apiRequest<T = any>(
     headers.set('Content-Type', 'application/json');
   }
 
+  const activeCsrfToken = getCsrfToken();
   // Include CSRF token for non-GET/HEAD/OPTIONS methods
-  if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(options.method?.toUpperCase() || 'GET')) {
-    headers.set('X-CSRF-Token', csrfToken);
+  if (activeCsrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(options.method?.toUpperCase() || 'GET')) {
+    headers.set('X-CSRF-Token', activeCsrfToken);
+  }
+
+  const bearerToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+  if (bearerToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${bearerToken}`);
   }
 
   const response = await fetch(url, {

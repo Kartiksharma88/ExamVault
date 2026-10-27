@@ -99,6 +99,7 @@ export class AuthGuard implements CanActivate {
     request.userId = session.userId;
     request.userRole = session.role;
     request.sessionId = sessionId;
+    (request as any).csrfToken = session.csrfToken;
 
     return true;
   }
