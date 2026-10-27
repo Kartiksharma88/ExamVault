@@ -17,13 +17,15 @@ interface Assignment {
   questionVersionId: string;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
   dueDate: string;
-  humanId: string;
-  subjectName: string;
-  subjectCode: string;
+  humanId?: string;
+  versionNo?: number;
+  subjectName?: string;
+  subjectCode?: string;
   topicName?: string;
-  difficulty: number;
-  type: string;
-  language: string;
+  difficulty?: number;
+  type?: string;
+  language?: string;
+  questionVersion?: any;
 }
 
 interface WorkspaceData {
@@ -36,7 +38,7 @@ interface WorkspaceData {
   difficulty: number;
   type: string;
   language: string;
-  phase: 'SOLVE' | 'EVALUATE' | 'COMPLETED';
+  phase: 'SOLVE' | 'EVALUATE' | 'COMPLETED' | 'SUBMITTED' | string;
   stem: string;
   options: { label: string; text: string }[];
   answerKey?: any; // Only present in EVALUATE or COMPLETED
@@ -61,6 +63,11 @@ export const ReviewerWorkspace: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [signedModal, setSignedModal] = useState<{
+    open: boolean;
+    decision: string;
+    humanId: string;
+  } | null>(null);
 
   // Phase 1 (SOLVE) state
   const [selectedOption, setSelectedOption] = useState<string>('');
@@ -69,20 +76,29 @@ export const ReviewerWorkspace: React.FC = () => {
 
   // Phase 2 (EVALUATE) state
   const [checklist, setChecklist] = useState({
-    accuracy: true,
-    singleCorrectAnswer: true,
-    clarityWording: true,
-    plausibleDistractors: true,
-    syllabusAlignment: true,
+    contentAccuracy: true,
+    singleDefensibleAnswer: true,
+    clarityAndWording: true,
+    distractorPlausibility: true,
+    syllabusTopicAlignment: true,
     difficultyAppropriate: true,
     languageEquivalence: true,
-    fairnessNoBias: true,
-    formattingMathLatex: true,
+    biasAndSensitivity: true,
+    formattingMathRendering: true,
   });
   const [comments, setComments] = useState<string>('');
   const [decision, setDecision] = useState<'APPROVE' | 'REQUEST_CHANGES' | 'REJECT'>('APPROVE');
   const [showMfaModal, setShowMfaModal] = useState<boolean>(false);
   const [totpCode, setTotpCode] = useState<string>('');
+
+  const handleBackToDashboard = () => {
+    setSignedModal(null);
+    setSelectedAssignmentId(null);
+    setWorkspace(null);
+    setSuccessMsg(null);
+    setError(null);
+    fetchQueue();
+  };
 
   // Fetch Review Queue
   const fetchQueue = async () => {
@@ -120,6 +136,12 @@ export const ReviewerWorkspace: React.FC = () => {
           }
           if (data.data.existingReview.timeTakenSeconds) {
             setTimeTakenMinutes(Math.round(data.data.existingReview.timeTakenSeconds / 60) || 1);
+          }
+          if (data.data.existingReview.decision) {
+            setDecision(data.data.existingReview.decision as any);
+          }
+          if (data.data.existingReview.checklist) {
+            setChecklist(data.data.existingReview.checklist);
           }
         }
       } else {
@@ -194,8 +216,13 @@ export const ReviewerWorkspace: React.FC = () => {
       );
       if (data.success) {
         setShowMfaModal(false);
-        setSuccessMsg(`Review completed and cryptographically signed (${data.data.decision})!`);
-        await openWorkspace(selectedAssignmentId!);
+        const signedDecision = data.data?.decision || decision;
+        setSuccessMsg(`Review completed and cryptographically signed (${signedDecision})!`);
+        setSignedModal({
+          open: true,
+          decision: signedDecision,
+          humanId: workspace?.humanId || '',
+        });
         fetchQueue();
       } else {
         setError('Failed to submit review');
@@ -265,45 +292,60 @@ export const ReviewerWorkspace: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {queue.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-mono font-medium text-slate-900">
-                        {item.humanId}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-slate-800">{item.subjectName}</span>
-                        {item.topicName && <span className="text-slate-400 text-xs block">{item.topicName}</span>}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-500">
-                        {item.type}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                            item.status === 'COMPLETED'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : item.status === 'IN_PROGRESS'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                        {new Date(item.dueDate).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => openWorkspace(item.id)}
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg shadow-xs transition-colors"
-                        >
-                          <span>{item.status === 'COMPLETED' ? 'View Review' : 'Enter Workspace'}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {queue.map((item) => {
+                    const qId = item.humanId || item.questionVersion?.question?.humanId || `EV-${item.id.slice(0, 8)}`;
+                    const vNo = item.versionNo || item.questionVersion?.versionNo || 1;
+                    const subj = item.subjectName || item.questionVersion?.question?.subject?.name || 'General';
+                    const top = item.topicName || item.questionVersion?.question?.topic?.name;
+                    const qType = item.type || item.questionVersion?.question?.type || 'MCQ_SINGLE';
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-mono font-medium text-slate-900">
+                          <span className="font-bold text-slate-900">{qId}</span>
+                          <span className="text-xs text-slate-400 block font-normal">v{vNo}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-semibold text-slate-800">{subj}</span>
+                          {top ? (
+                            <span className="text-slate-400 text-xs block">{top}</span>
+                          ) : (
+                            <span className="text-slate-400 text-xs block italic">Core Curriculum</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs px-2 py-0.5 font-mono bg-slate-100 text-slate-700 rounded-md border border-slate-200">
+                            {qType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                              item.status === 'COMPLETED'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : item.status === 'IN_PROGRESS'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                          {new Date(item.dueDate).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => openWorkspace(item.id)}
+                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg shadow-xs transition-colors"
+                          >
+                            <span>{item.status === 'COMPLETED' ? 'View Review' : 'Enter Workspace'}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -314,9 +356,12 @@ export const ReviewerWorkspace: React.FC = () => {
   }
 
   // Two-Step Review Workspace
-  const isSolvePhase = workspace.phase === 'SOLVE';
-  const isEvaluatePhase = workspace.phase === 'EVALUATE';
-  const isCompleted = workspace.phase === 'COMPLETED';
+  const isCompleted =
+    workspace.phase === 'COMPLETED' ||
+    workspace.phase === 'SUBMITTED' ||
+    (workspace as any).status === 'COMPLETED';
+  const isSolvePhase = workspace.phase === 'SOLVE' && !isCompleted;
+  const isEvaluatePhase = workspace.phase === 'EVALUATE' || isCompleted;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -324,11 +369,7 @@ export const ReviewerWorkspace: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
         <div>
           <button
-            onClick={() => {
-              setSelectedAssignmentId(null);
-              setWorkspace(null);
-              fetchQueue();
-            }}
+            onClick={handleBackToDashboard}
             className="text-xs text-slate-500 hover:text-slate-900 font-medium mb-1 inline-flex items-center space-x-1"
           >
             <span>← Back to Review Queue</span>
@@ -364,10 +405,10 @@ export const ReviewerWorkspace: React.FC = () => {
 
           <div
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-              isEvaluatePhase
+              isCompleted
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-1 ring-emerald-500/30'
+                : isEvaluatePhase
                 ? 'bg-blue-50 text-blue-700 border-blue-200 ring-2 ring-blue-500/20'
-                : isCompleted
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-slate-50 text-slate-400 border-slate-200'
             }`}
           >
@@ -586,15 +627,15 @@ export const ReviewerWorkspace: React.FC = () => {
               {/* 9 Checklist Items */}
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {[
-                  { key: 'accuracy', label: '1. Content accuracy and scientific correctness' },
-                  { key: 'singleCorrectAnswer', label: '2. Exactly one defensible correct answer' },
-                  { key: 'clarityWording', label: '3. Clarity and unambiguous wording' },
-                  { key: 'plausibleDistractors', label: '4. Plausibility of distractors' },
-                  { key: 'syllabusAlignment', label: '5. Syllabus and topic alignment' },
+                  { key: 'contentAccuracy', label: '1. Content accuracy and scientific correctness' },
+                  { key: 'singleDefensibleAnswer', label: '2. Exactly one defensible correct answer' },
+                  { key: 'clarityAndWording', label: '3. Clarity and unambiguous wording' },
+                  { key: 'distractorPlausibility', label: '4. Plausibility of distractors' },
+                  { key: 'syllabusTopicAlignment', label: '5. Syllabus and topic alignment' },
                   { key: 'difficultyAppropriate', label: '6. Difficulty appropriateness' },
                   { key: 'languageEquivalence', label: '7. Translation & language equivalence' },
-                  { key: 'fairnessNoBias', label: '8. Bias, sensitivity, and fairness' },
-                  { key: 'formattingMathLatex', label: '9. Mathematical formatting & LaTeX rendering' },
+                  { key: 'biasAndSensitivity', label: '8. Bias, sensitivity, and fairness' },
+                  { key: 'formattingMathRendering', label: '9. Mathematical formatting & LaTeX rendering' },
                 ].map((item) => (
                   <label
                     key={item.key}
@@ -631,7 +672,7 @@ export const ReviewerWorkspace: React.FC = () => {
               </div>
 
               {/* Decision Radio Group */}
-              {!isCompleted && (
+              {!isCompleted ? (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 block">Recommendation</label>
                   <div className="grid grid-cols-3 gap-2">
@@ -670,10 +711,47 @@ export const ReviewerWorkspace: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block">Signed Recommendation</label>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-600">Recorded Decision:</span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        (workspace.existingReview?.decision || decision) === 'APPROVE'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : (workspace.existingReview?.decision || decision) === 'REQUEST_CHANGES'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : 'bg-red-100 text-red-800 border border-red-300'
+                      }`}
+                    >
+                      {workspace.existingReview?.decision || decision}
+                    </span>
+                  </div>
+                </div>
               )}
 
-              {/* Submit Final Decision button */}
-              {!isCompleted && (
+              {/* Submit Final Decision button OR Completed card */}
+              {isCompleted ? (
+                <div className="space-y-3 pt-2">
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 space-y-1.5">
+                    <div className="flex items-center space-x-2 font-bold text-sm">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <span>Review Finalized & Cryptographically Signed</span>
+                    </div>
+                    <p className="text-xs text-emerald-700 leading-relaxed">
+                      This evaluation has been signed using your Ed25519 cryptographic key and committed to the tamper-evident audit trail.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBackToDashboard}
+                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <span>Back to Review Queue</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
                 <button
                   disabled={actionLoading || !comments.trim()}
                   onClick={() => setShowMfaModal(true)}
@@ -754,6 +832,50 @@ export const ReviewerWorkspace: React.FC = () => {
                 {actionLoading ? <span>Signing...</span> : <span>Confirm & Sign</span>}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review Signed Success Centered Modal */}
+      {signedModal?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl border border-slate-200 text-center space-y-6">
+            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center ring-8 ring-emerald-50">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            </div>
+
+            <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl shadow-xs">
+              <h2 className="text-lg font-bold text-emerald-900 leading-snug">
+                Review completed and cryptographically signed ({signedModal.decision})!
+              </h2>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2 text-left font-mono">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                <span className="text-slate-500">Question Commitment:</span>
+                <span className="font-bold text-slate-900">{signedModal.humanId}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                <span className="text-slate-500">Decision Recorded:</span>
+                <span className="font-bold text-emerald-700">{signedModal.decision}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Signature Algorithm:</span>
+                <span className="text-slate-700 font-semibold">Ed25519 (Canonical RFC-8032)</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              The cryptographic approval signature has been anchored to the tamper-evident audit ledger.
+            </p>
+
+            <button
+              onClick={handleBackToDashboard}
+              className="w-full py-3 px-6 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
+            >
+              <span>Back to Dashboard</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

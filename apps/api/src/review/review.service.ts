@@ -268,7 +268,23 @@ export class ReviewService {
       orderBy: [{ dueDate: 'asc' }],
     });
 
-    return assignments;
+    return assignments.map((a) => {
+      const q = a.questionVersion?.question;
+      return {
+        ...a,
+        humanId: q?.humanId,
+        versionNo: a.questionVersion?.versionNo,
+        subjectName: q?.subject?.name,
+        subjectCode: q?.subject?.code,
+        topicName: q?.topic?.name,
+        type: q?.type,
+        difficulty: q?.difficulty,
+        cognitiveLevel: q?.cognitiveLevel,
+        marks: q?.marks,
+        negativeMarks: q?.negativeMarks,
+        language: q?.language,
+      };
+    });
   }
 
   /**

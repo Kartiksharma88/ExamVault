@@ -54,6 +54,20 @@ export class ReviewController {
     @Body() body: any,
     @Req() req: Request,
   ) {
+    if (body?.checklist) {
+      const c = body.checklist;
+      body.checklist = {
+        contentAccuracy: Boolean(c.contentAccuracy ?? c.accuracy ?? true),
+        singleDefensibleAnswer: Boolean(c.singleDefensibleAnswer ?? c.singleCorrectAnswer ?? true),
+        clarityAndWording: Boolean(c.clarityAndWording ?? c.clarityWording ?? true),
+        distractorPlausibility: Boolean(c.distractorPlausibility ?? c.plausibleDistractors ?? true),
+        syllabusTopicAlignment: Boolean(c.syllabusTopicAlignment ?? c.syllabusAlignment ?? true),
+        difficultyAppropriate: Boolean(c.difficultyAppropriate ?? true),
+        languageEquivalence: Boolean(c.languageEquivalence ?? true),
+        biasAndSensitivity: Boolean(c.biasAndSensitivity ?? c.fairnessNoBias ?? true),
+        formattingMathRendering: Boolean(c.formattingMathRendering ?? c.formattingMathLatex ?? true),
+      };
+    }
     const parsed = ReviewSubmitSchema.parse(body);
     const result = await this.reviewService.submitEvaluation(id, parsed, req.userId!);
     return { success: true, data: result };
