@@ -1,6 +1,6 @@
 // ExamVault Prisma Schema
 // All question content and answer keys are stored encrypted (AES-256-GCM envelope encryption)
-// The audit_events table is append-only (enforced by database triggers)
+// The audit_events and approvals tables are append-only (enforced by database triggers)
 
 generator client {
   provider = "prisma-client-js"
@@ -19,6 +19,7 @@ enum Role {
   EXAMINER
   REVIEWER
   AUDITOR
+  MODERATOR
 }
 
 model User {
@@ -36,30 +37,88 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  sessions        Session[]
-  questions        Question[]
-  questionVersions QuestionVersion[]
-  auditEvents      AuditEvent[]
+  sessions             Session[]
+  questions            Question[]
+  questionVersions     QuestionVersion[]
+  auditEvents          AuditEvent[]
+  userSubjectExpertise UserSubjectExpertise[]
+  signingKey           UserSigningKey?
+  conflictDeclarations ConflictDeclaration[]
+  proposedPolicies     ApprovalPolicy[]        @relation("ProposedPolicies")
+  approvedPolicies     ApprovalPolicy[]        @relation("ApprovedPolicies")
+  reviewAssignments    ReviewAssignment[]
+  reviews              Review[]
+  approvals            Approval[]
+  duplicateDispositions DuplicateDisposition[]
+  corpusSources        CorpusSource[]
+  notifications        Notification[]
+  retiredVersions      QuestionVersion[]       @relation("RetiredBy")
 
   @@map("users")
 }
 
 model Session {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  csrfToken  String   @map("csrf_token") @db.VarChar(128)
-  mfaVerified Boolean @default(false) @map("mfa_verified")
-  expiresAt  DateTime @map("expires_at")
-  lastActive DateTime @default(now()) @map("last_active")
-  userAgent  String?  @map("user_agent") @db.VarChar(512)
-  ipAddress  String?  @map("ip_address") @db.VarChar(45)
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  csrfToken   String   @map("csrf_token") @db.VarChar(128)
+  mfaVerified Boolean  @default(false) @map("mfa_verified")
+  expiresAt   DateTime @map("expires_at")
+  lastActive  DateTime @default(now()) @map("last_active")
+  userAgent   String?  @map("user_agent") @db.VarChar(512)
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  createdAt   DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model UserSubjectExpertise {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  subjectId String   @map("subject_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectId])
+  @@map("user_subject_expertise")
+}
+
+model UserSigningKey {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  publicKey         String   @map("public_key") @db.VarChar(256)
+  wrappedPrivateKey Bytes    @map("wrapped_private_key")
+  keyId             String   @map("key_id") @db.VarChar(64)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_signing_keys")
+}
+
+model ConflictDeclaration {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @map("user_id") @db.Uuid
+  conflictType         String   @map("conflict_type") @db.VarChar(64)
+  encryptedDescription Bytes    @map("encrypted_description")
+  descriptionNonce     Bytes    @map("description_nonce")
+  descriptionTag       Bytes    @map("description_tag")
+  wrappedKey           Bytes    @map("wrapped_key")
+  keyId                String   @map("key_id") @db.VarChar(64)
+  conflictHash         String   @map("conflict_hash") @db.VarChar(64)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([conflictHash])
+  @@map("conflict_declarations")
 }
 
 // ── Syllabus ───────────────────────────────────────────────────────
@@ -73,6 +132,7 @@ model Exam {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   subjects Subject[]
+  policies ApprovalPolicy[]
 
   @@map("exams")
 }
@@ -83,15 +143,15 @@ model Subject {
   name      String   @db.VarChar(255)
   code      String   @db.VarChar(10) // e.g., PHY, CHE, MAT
   isActive  Boolean  @default(true) @map("is_active")
+  nextSeq   Int      @default(1) @map("next_seq")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  exam      Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
-  topics    Topic[]
-  questions Question[]
-
-  // Human-readable ID sequence for this subject
-  nextSeq   Int       @default(1) @map("next_seq")
+  exam                 Exam                   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  topics               Topic[]
+  questions            Question[]
+  userSubjectExpertise UserSubjectExpertise[]
+  policies             ApprovalPolicy[]
 
   @@unique([examId, code])
   @@map("subjects")
@@ -131,11 +191,16 @@ model Subtopic {
 enum QuestionStatusEnum {
   DRAFT
   SUBMITTED
+  SCREENING
+  DUPLICATE_FLAGGED
+  READY_FOR_REVIEW
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  MODERATION
+  APPROVED
+  REJECTED
   WITHDRAWN
-  UNDER_REVIEW // TODO: Step 2 — review workflow
-  APPROVED     // TODO: Step 2 — review workflow
-  REJECTED     // TODO: Step 2 — review workflow
-  RETIRED      // TODO: Step 2 — review workflow
+  RETIRED
 
   @@map("question_status")
 }
@@ -168,29 +233,30 @@ enum LanguageEnum {
 }
 
 model Question {
-  id             String           @id @default(uuid()) @db.Uuid
-  humanId        String           @unique @map("human_id") @db.VarChar(20) // EV-PHY-000123
-  authorId       String           @map("author_id") @db.Uuid
-  subjectId      String           @map("subject_id") @db.Uuid
-  topicId        String?          @map("topic_id") @db.Uuid
-  subtopicId     String?          @map("subtopic_id") @db.Uuid
+  id             String             @id @default(uuid()) @db.Uuid
+  humanId        String             @unique @map("human_id") @db.VarChar(20) // EV-PHY-000123
+  authorId       String             @map("author_id") @db.Uuid
+  subjectId      String             @map("subject_id") @db.Uuid
+  topicId        String?            @map("topic_id") @db.Uuid
+  subtopicId     String?            @map("subtopic_id") @db.Uuid
   type           QuestionTypeEnum
-  difficulty     Float            @default(0.5)
+  difficulty     Float              @default(0.5)
   cognitiveLevel CognitiveLevelEnum @map("cognitive_level")
-  marks          Float            @default(1)
-  negativeMarks  Float            @default(0) @map("negative_marks")
-  estimatedTime  Int              @default(120) @map("estimated_time") // seconds
-  language       LanguageEnum     @default(EN)
-  currentVersion Int              @default(1) @map("current_version")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  marks          Float              @default(1)
+  negativeMarks  Float              @default(0) @map("negative_marks")
+  estimatedTime  Int                @default(120) @map("estimated_time") // seconds
+  language       LanguageEnum       @default(EN)
+  currentVersion Int                @default(1) @map("current_version")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
 
-  author   User     @relation(fields: [authorId], references: [id])
-  subject  Subject  @relation(fields: [subjectId], references: [id])
-  topic    Topic?   @relation(fields: [topicId], references: [id])
+  author   User      @relation(fields: [authorId], references: [id])
+  subject  Subject   @relation(fields: [subjectId], references: [id])
+  topic    Topic?    @relation(fields: [topicId], references: [id])
   subtopic Subtopic? @relation(fields: [subtopicId], references: [id])
 
-  versions QuestionVersion[]
+  versions  QuestionVersion[]
+  approvals Approval[]
 
   @@index([authorId])
   @@index([subjectId])
@@ -200,37 +266,318 @@ model Question {
 }
 
 model QuestionVersion {
-  id                 String             @id @default(uuid()) @db.Uuid
-  questionId         String             @map("question_id") @db.Uuid
-  versionNo          Int                @map("version_no")
-  status             QuestionStatusEnum @default(DRAFT)
-  authorId           String             @map("author_id") @db.Uuid
+  id                  String             @id @default(uuid()) @db.Uuid
+  questionId          String             @map("question_id") @db.Uuid
+  versionNo           Int                @map("version_no")
+  status              QuestionStatusEnum @default(DRAFT)
+  authorId            String             @map("author_id") @db.Uuid
 
   // Encrypted content (AES-256-GCM envelope encryption)
-  encryptedContent   Bytes              @map("encrypted_content")    // ciphertext of QuestionContent
-  contentNonce       Bytes              @map("content_nonce")        // 96-bit GCM nonce
-  contentTag         Bytes              @map("content_tag")          // 128-bit GCM auth tag
-  encryptedContentKey Bytes             @map("encrypted_content_key") // data key wrapped by master key
+  encryptedContent    Bytes              @map("encrypted_content")
+  contentNonce        Bytes              @map("content_nonce")
+  contentTag          Bytes              @map("content_tag")
+  encryptedContentKey Bytes              @map("encrypted_content_key")
 
   // Encrypted answer key (separate envelope)
-  encryptedAnswer    Bytes              @map("encrypted_answer")
-  answerNonce        Bytes              @map("answer_nonce")
-  answerTag          Bytes              @map("answer_tag")
-  encryptedAnswerKey Bytes              @map("encrypted_answer_key")
+  encryptedAnswer     Bytes              @map("encrypted_answer")
+  answerNonce         Bytes              @map("answer_nonce")
+  answerTag           Bytes              @map("answer_tag")
+  encryptedAnswerKey  Bytes              @map("encrypted_answer_key")
 
   // Integrity
-  contentCommitment  String             @map("content_commitment") @db.VarChar(128) // SHA-256(salt + canonical JSON)
-  keyId              String             @map("key_id") @db.VarChar(64)              // for key rotation tracking
+  contentCommitment   String             @map("content_commitment") @db.VarChar(128)
+  keyId               String             @map("key_id") @db.VarChar(64)
 
-  createdAt          DateTime           @default(now()) @map("created_at")
+  // Step 2 versioning additions
+  parentVersionId     String?            @map("parent_version_id") @db.Uuid
+  changeJustification String?            @map("change_justification") @db.Text
+  policyVersion       Int?               @map("policy_version")
+  supersededAt        DateTime?          @map("superseded_at")
+  retirementReason    String?            @map("retirement_reason") @db.VarChar(64)
+  retiredById         String?            @map("retired_by_id") @db.Uuid
 
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  author   User     @relation(fields: [authorId], references: [id])
+  createdAt           DateTime           @default(now()) @map("created_at")
+
+  question             Question              @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author               User                  @relation(fields: [authorId], references: [id])
+  parentVersion        QuestionVersion?      @relation("VersionHierarchy", fields: [parentVersionId], references: [id])
+  childVersions        QuestionVersion[]     @relation("VersionHierarchy")
+  retiredBy            User?                 @relation("RetiredBy", fields: [retiredById], references: [id])
+  originalityReport    OriginalityReport?
+  duplicateDisposition DuplicateDisposition?
+  reviewRounds         ReviewRound[]
+  reviews              Review[]
+  reviewAssignments    ReviewAssignment[]
+  approvals            Approval[]
 
   @@unique([questionId, versionNo])
   @@index([questionId])
   @@index([status])
+  @@index([parentVersionId])
   @@map("question_versions")
+}
+
+// ── Approval Policies ──────────────────────────────────────────────
+
+model ApprovalPolicy {
+  id                         String            @id @default(uuid()) @db.Uuid
+  examId                     String?           @map("exam_id") @db.Uuid
+  subjectId                  String?           @map("subject_id") @db.Uuid
+  questionType               QuestionTypeEnum? @map("question_type")
+  version                    Int               @default(1)
+  requiredReviewers          Int               @default(2) @map("required_reviewers")
+  requireBlindSolve          Boolean           @default(true) @map("require_blind_solve")
+  requireModerator           Boolean           @default(true) @map("require_moderator")
+  requireLanguageReview      Boolean           @default(true) @map("require_language_review")
+  maxReviewDays              Int               @default(7) @map("max_review_days")
+  exactMatchThreshold        Float             @default(1.0) @map("exact_match_threshold")
+  highSimilarityThreshold    Float             @default(0.85) @map("high_similarity_threshold")
+  mediumSimilarityThreshold  Float             @default(0.60) @map("medium_similarity_threshold")
+  effectiveFrom              DateTime          @default(now()) @map("effective_from")
+  proposedById               String            @map("proposed_by_id") @db.Uuid
+  approvedById               String?           @map("approved_by_id") @db.Uuid
+  isActive                   Boolean           @default(false) @map("is_active")
+  createdAt                  DateTime          @default(now()) @map("created_at")
+  updatedAt                  DateTime          @updatedAt @map("updated_at")
+
+  proposedBy   User          @relation("ProposedPolicies", fields: [proposedById], references: [id])
+  approvedBy   User?         @relation("ApprovedPolicies", fields: [approvedById], references: [id])
+  exam         Exam?         @relation(fields: [examId], references: [id])
+  subject      Subject?      @relation(fields: [subjectId], references: [id])
+  reviewRounds ReviewRound[]
+
+  @@index([subjectId])
+  @@index([isActive])
+  @@map("approval_policies")
+}
+
+// ── Review Rounds and Assignments ──────────────────────────────────
+
+model ReviewRound {
+  id                String   @id @default(uuid()) @db.Uuid
+  questionVersionId String   @map("question_version_id") @db.Uuid
+  roundNumber       Int      @default(1) @map("round_number")
+  policyVersion     Int      @default(1) @map("policy_version")
+  policyId          String?  @map("policy_id") @db.Uuid
+  status            String   @default("ACTIVE") @db.VarChar(32)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  questionVersion QuestionVersion    @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  policy          ApprovalPolicy?    @relation(fields: [policyId], references: [id])
+  assignments     ReviewAssignment[]
+
+  @@index([questionVersionId])
+  @@map("review_rounds")
+}
+
+model ReviewAssignment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  roundId            String   @map("round_id") @db.Uuid
+  questionVersionId  String   @map("question_version_id") @db.Uuid
+  reviewerId         String   @map("reviewer_id") @db.Uuid
+  assignedRole       String   @default("REVIEWER") @map("assigned_role") @db.VarChar(20)
+  status             String   @default("PENDING") @db.VarChar(32)
+  dueDate            DateTime @map("due_date")
+  selectionSeed      String   @map("selection_seed") @db.VarChar(64)
+  eligibleCount      Int      @map("eligible_count")
+  reassignedToId     String?  @map("reassigned_to_id") @db.Uuid
+  reassignedById     String?  @map("reassigned_by_id") @db.Uuid
+  reassignmentReason String?  @map("reassignment_reason") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  round           ReviewRound     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  reviewer        User            @relation(fields: [reviewerId], references: [id])
+  review          Review?
+
+  @@unique([roundId, reviewerId])
+  @@index([reviewerId])
+  @@index([status])
+  @@map("review_assignments")
+}
+
+model Review {
+  id                         String    @id @default(uuid()) @db.Uuid
+  assignmentId               String    @unique @map("assignment_id") @db.Uuid
+  questionVersionId          String    @map("question_version_id") @db.Uuid
+  reviewerId                 String    @map("reviewer_id") @db.Uuid
+  phase                      String    @default("SOLVE") @db.VarChar(20)
+  contentCommitment          String    @map("content_commitment") @db.VarChar(128)
+  encryptedBlindAnswer       Bytes?    @map("encrypted_blind_answer")
+  blindAnswerNonce           Bytes?    @map("blind_answer_nonce")
+  blindAnswerTag             Bytes?    @map("blind_answer_tag")
+  encryptedSolveKey          Bytes?    @map("encrypted_solve_key")
+  timeTakenSeconds           Int?      @map("time_taken_seconds")
+  difficultyRating           Float?    @map("difficulty_rating")
+  blindAnswerMatchesKey      Boolean?  @map("blind_answer_matches_key")
+  disagreementFlag           Boolean   @default(false) @map("disagreement_flag")
+  disagreementResolved       Boolean   @default(false) @map("disagreement_resolved")
+  disagreementResolutionNote String?   @map("disagreement_resolution_note") @db.Text
+  checklist                  Json?
+  decision                   String?   @db.VarChar(32)
+  encryptedComments          Bytes?    @map("encrypted_comments")
+  commentsNonce              Bytes?    @map("comments_nonce")
+  commentsTag                Bytes?    @map("comments_tag")
+  encryptedCommentsKey       Bytes?    @map("encrypted_comments_key")
+  keyId                      String?   @map("key_id") @db.VarChar(64)
+  submittedAt                DateTime? @map("submitted_at")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  assignment      ReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion  @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  reviewer        User             @relation(fields: [reviewerId], references: [id])
+
+  @@index([questionVersionId])
+  @@index([reviewerId])
+  @@map("reviews")
+}
+
+// ── Approvals (Append-Only) ────────────────────────────────────────
+
+model Approval {
+  id                String   @id @default(uuid()) @db.Uuid
+  questionId        String   @map("question_id") @db.Uuid
+  versionNo         Int      @map("version_no")
+  contentCommitment String   @map("content_commitment") @db.VarChar(128)
+  decision          String   @db.VarChar(32)
+  role              String   @db.VarChar(32) // REVIEWER or MODERATOR
+  approverId        String   @map("approver_id") @db.Uuid
+  reviewRound       Int      @default(1) @map("review_round")
+  policyVersion     Int      @default(1) @map("policy_version")
+  timestamp         DateTime @default(now())
+  signature         String   @db.VarChar(256)
+
+  approver User            @relation(fields: [approverId], references: [id])
+  question Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  version  QuestionVersion @relation(fields: [questionId, versionNo], references: [questionId, versionNo], onDelete: Cascade)
+
+  @@index([questionId, versionNo])
+  @@index([approverId])
+  @@map("approvals")
+}
+
+// ── Originality Check ──────────────────────────────────────────────
+
+model OriginalityReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  questionVersionId String   @unique @map("question_version_id") @db.Uuid
+  riskLevel         String   @map("risk_level") @db.VarChar(20)
+  highestScore      Float    @default(0) @map("highest_score")
+  checkedAt         DateTime @default(now()) @map("checked_at")
+  serviceVersion    String   @default("1.0.0") @map("service_version") @db.VarChar(32)
+  metadata          Json?
+
+  questionVersion QuestionVersion    @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  matches         OriginalityMatch[]
+
+  @@map("originality_reports")
+}
+
+model OriginalityMatch {
+  id                       String   @id @default(uuid()) @db.Uuid
+  reportId                 String   @map("report_id") @db.Uuid
+  sourceType               String   @map("source_type") @db.VarChar(20)
+  sourceReference          String   @map("source_reference") @db.VarChar(255)
+  matchedQuestionVersionId String?  @map("matched_question_version_id") @db.Uuid
+  matchedDocumentId        String?  @map("matched_document_id") @db.Uuid
+  overallScore             Float    @map("overall_score")
+  exactHashMatch           Boolean  @default(false) @map("exact_hash_match")
+  minhashScore             Float    @default(0) @map("minhash_score")
+  tfidfScore               Float    @default(0) @map("tfidf_score")
+  semanticScore            Float?   @map("semantic_score")
+  stemScore                Float    @default(0) @map("stem_score")
+  optionsScore             Float    @default(0) @map("options_score")
+  optionsReorderedMatch    Boolean  @default(false) @map("options_reordered_match")
+  matchedSpans             Json?    @map("matched_spans")
+  sourceTextSnippet        String?  @map("source_text_snippet") @db.Text
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  report OriginalityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("originality_matches")
+}
+
+model DuplicateDisposition {
+  id                        String   @id @default(uuid()) @db.Uuid
+  questionVersionId         String   @unique @map("question_version_id") @db.Uuid
+  disposition               String   @db.VarChar(32)
+  moderatorId               String   @map("moderator_id") @db.Uuid
+  encryptedJustification    Bytes    @map("encrypted_justification")
+  justificationNonce        Bytes    @map("justification_nonce")
+  justificationTag          Bytes    @map("justification_tag")
+  encryptedJustificationKey Bytes    @map("encrypted_justification_key")
+  keyId                     String   @map("key_id") @db.VarChar(64)
+  dispositionedAt           DateTime @default(now()) @map("dispositioned_at")
+
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  moderator       User            @relation(fields: [moderatorId], references: [id])
+
+  @@map("duplicate_dispositions")
+}
+
+// ── Corpus for Reference Matching ──────────────────────────────────
+
+model CorpusSource {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(255)
+  type         String   @db.VarChar(32)
+  licenseNote  String?  @map("license_note") @db.Text
+  importedById String   @map("imported_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  importedBy User             @relation(fields: [importedById], references: [id])
+  documents  CorpusDocument[]
+
+  @@map("corpus_sources")
+}
+
+model CorpusDocument {
+  id                String   @id @default(uuid()) @db.Uuid
+  sourceId          String   @map("source_id") @db.Uuid
+  title             String   @db.VarChar(255)
+  identifier        String   @db.VarChar(100)
+  plaintextContent  String   @map("plaintext_content") @db.Text
+  normalizedContent String   @map("normalized_content") @db.Text
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  source CorpusSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@index([identifier])
+  @@map("corpus_documents")
+}
+
+// ── Notifications ──────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(64)
+  title     String   @db.VarChar(255)
+  message   String   @db.Text
+  link      String?  @db.VarChar(255)
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// ── State Machine Transition Rules ─────────────────────────────────
+
+model ValidStateTransition {
+  fromStatus String @map("from_status") @db.VarChar(32)
+  toStatus   String @map("to_status") @db.VarChar(32)
+
+  @@id([fromStatus, toStatus])
+  @@map("valid_state_transitions")
 }
 
 // ── Audit Log ──────────────────────────────────────────────────────
@@ -243,9 +590,9 @@ model AuditEvent {
   targetType String   @map("target_type") @db.VarChar(64)
   targetId   String?  @map("target_id") @db.VarChar(255)
   metadata   Json?    @db.JsonB
-  prevHash   String   @map("prev_hash") @db.VarChar(128) // hex-encoded SHA-256
+  prevHash   String   @map("prev_hash") @db.VarChar(128)
   entryHash  String   @map("entry_hash") @db.VarChar(128)
-  signature  String   @db.VarChar(256) // base64-encoded Ed25519 signature
+  signature  String   @db.VarChar(256)
 
   actor User? @relation(fields: [actorId], references: [id])
 

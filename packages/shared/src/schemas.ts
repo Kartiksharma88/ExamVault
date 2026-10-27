@@ -1,24 +1,65 @@
 import { z } from 'zod';
 
 // ── Enums ──────────────────────────────────────────────────────────
-export const UserRole = z.enum(['ADMIN', 'EXAMINER', 'REVIEWER', 'AUDITOR']);
+export const UserRole = z.enum(['ADMIN', 'EXAMINER', 'REVIEWER', 'AUDITOR', 'MODERATOR']);
 export type UserRole = z.infer<typeof UserRole>;
 
 export const QuestionType = z.enum(['MCQ_SINGLE', 'MCQ_MULTI', 'INTEGER']);
 export type QuestionType = z.infer<typeof QuestionType>;
 
-// Step 1 active: DRAFT, SUBMITTED, WITHDRAWN
-// Step 2 placeholders: UNDER_REVIEW, APPROVED, REJECTED, RETIRED
 export const QuestionStatus = z.enum([
   'DRAFT',
   'SUBMITTED',
+  'SCREENING',
+  'DUPLICATE_FLAGGED',
+  'READY_FOR_REVIEW',
+  'UNDER_REVIEW',
+  'CHANGES_REQUESTED',
+  'MODERATION',
+  'APPROVED',
+  'REJECTED',
   'WITHDRAWN',
-  'UNDER_REVIEW',  // TODO: Step 2 — review workflow
-  'APPROVED',      // TODO: Step 2 — review workflow
-  'REJECTED',      // TODO: Step 2 — review workflow
-  'RETIRED',       // TODO: Step 2 — review workflow
+  'RETIRED',
 ]);
 export type QuestionStatus = z.infer<typeof QuestionStatus>;
+
+export const DuplicateDisposition = z.enum([
+  'CONFIRMED_DUPLICATE',
+  'NOT_DUPLICATE',
+  'SIMILAR_ALLOWED',
+]);
+export type DuplicateDisposition = z.infer<typeof DuplicateDisposition>;
+
+export const ReviewDecision = z.enum([
+  'APPROVE',
+  'REQUEST_CHANGES',
+  'REJECT',
+]);
+export type ReviewDecision = z.infer<typeof ReviewDecision>;
+
+export const OriginalityRiskLevel = z.enum([
+  'NONE',
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'EXACT',
+]);
+export type OriginalityRiskLevel = z.infer<typeof OriginalityRiskLevel>;
+
+export const OriginalitySourceType = z.enum([
+  'BANK',
+  'PAST_PAPER',
+  'PUBLIC',
+]);
+export type OriginalitySourceType = z.infer<typeof OriginalitySourceType>;
+
+export const RetirementReason = z.enum([
+  'SUPERSEDED',
+  'OUTDATED_SYLLABUS',
+  'ERRONEOUS_CONTENT',
+  'OTHER',
+]);
+export type RetirementReason = z.infer<typeof RetirementReason>;
 
 export const CognitiveLevel = z.enum([
   'REMEMBER',
@@ -57,7 +98,31 @@ export const AuditAction = z.enum([
   'IMPORT_SUCCESS',
   'IMPORT_FAILURE',
   'ACCESS_DENIED',
-  // TODO: Step 2+ extension points
+  // Step 2 actions:
+  'SCREENING_START',
+  'SCREENING_COMPLETE',
+  'DUPLICATE_FLAGGED',
+  'DUPLICATE_DISPOSITION',
+  'REVIEWER_ASSIGNMENT',
+  'BLIND_ANSWER_SUBMIT',
+  'KEY_REVEAL',
+  'REVIEW_DECISION',
+  'DISAGREEMENT_RAISED',
+  'DISAGREEMENT_RESOLVED',
+  'MODERATOR_DECISION',
+  'APPROVAL_SIGNED',
+  'NEW_VERSION_CREATE',
+  'VERSION_SUPERSEDED',
+  'VERSION_RETIRED',
+  'POLICY_PROPOSE',
+  'POLICY_APPROVE',
+  'CONFLICT_UPDATE',
+  'STEP_UP_MFA_SUCCESS',
+  'STEP_UP_MFA_FAILURE',
+  'ORIGINALITY_SERVICE_FAILURE',
+  'REVIEW_COMMENT_READ',
+  'REVIEW_REASSIGN',
+  // Step 3+ placeholders:
   'QUESTION_REVIEW_START',
   'QUESTION_APPROVE',
   'QUESTION_REJECT',
@@ -362,3 +427,181 @@ export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
       })
       .optional(),
   });
+
+// ── Step 2: Approval Policy Schemas ────────────────────────────────
+export const ApprovalPolicySchema = z.object({
+  id: z.string().uuid(),
+  examId: z.string().uuid().nullable().optional(),
+  subjectId: z.string().uuid().nullable().optional(),
+  questionType: QuestionType.nullable().optional(),
+  version: z.number().int().positive(),
+  requiredReviewers: z.number().int().min(1).default(2),
+  requireBlindSolve: z.boolean().default(true),
+  requireModerator: z.boolean().default(true),
+  requireLanguageReview: z.boolean().default(true),
+  maxReviewDays: z.number().int().min(1).default(7),
+  exactMatchThreshold: z.number().min(0).max(1).default(1.0),
+  highSimilarityThreshold: z.number().min(0).max(1).default(0.85),
+  mediumSimilarityThreshold: z.number().min(0).max(1).default(0.60),
+  effectiveFrom: z.string().datetime(),
+  proposedById: z.string().uuid(),
+  approvedById: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().default(false),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ApprovalPolicy = z.infer<typeof ApprovalPolicySchema>;
+
+export const ProposePolicySchema = z.object({
+  examId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  questionType: QuestionType.optional(),
+  requiredReviewers: z.number().int().min(1).default(2),
+  requireBlindSolve: z.boolean().default(true),
+  requireModerator: z.boolean().default(true),
+  requireLanguageReview: z.boolean().default(true),
+  maxReviewDays: z.number().int().min(1).default(7),
+  exactMatchThreshold: z.number().min(0).max(1).default(1.0),
+  highSimilarityThreshold: z.number().min(0).max(1).default(0.85),
+  mediumSimilarityThreshold: z.number().min(0).max(1).default(0.60),
+});
+export type ProposePolicyInput = z.infer<typeof ProposePolicySchema>;
+
+export const ApprovePolicySchema = z.object({
+  policyId: z.string().uuid(),
+});
+export type ApprovePolicyInput = z.infer<typeof ApprovePolicySchema>;
+
+// ── Step 2: Reviewer Schemas (Blind Solve & Checklist) ─────────────
+export const BlindAnswerSubmitSchema = z.object({
+  blindAnswer: z.union([z.string(), z.array(z.string()), z.number()]),
+  timeTakenSeconds: z.number().int().positive(),
+  difficultyRating: z.number().min(0).max(1),
+});
+export type BlindAnswerSubmitInput = z.infer<typeof BlindAnswerSubmitSchema>;
+
+export const ReviewChecklistSchema = z.object({
+  contentAccuracy: z.boolean(),
+  singleDefensibleAnswer: z.boolean(),
+  clarityAndWording: z.boolean(),
+  distractorPlausibility: z.boolean(),
+  syllabusTopicAlignment: z.boolean(),
+  difficultyAppropriate: z.boolean(),
+  languageEquivalence: z.boolean().optional(),
+  biasAndSensitivity: z.boolean(),
+  formattingMathRendering: z.boolean(),
+});
+export type ReviewChecklist = z.infer<typeof ReviewChecklistSchema>;
+
+export const ReviewSubmitSchema = z.object({
+  decision: ReviewDecision,
+  checklist: ReviewChecklistSchema,
+  comments: z.string().min(1).max(5000),
+  totpToken: z.string().length(6).regex(/^\d{6}$/),
+});
+export type ReviewSubmitInput = z.infer<typeof ReviewSubmitSchema>;
+
+// ── Step 2: Moderator Schemas ──────────────────────────────────────
+export const DuplicateDispositionSchema = z.object({
+  disposition: DuplicateDisposition,
+  justification: z.string().min(10, 'Justification must be at least 10 characters').max(5000),
+});
+export type DuplicateDispositionInput = z.infer<typeof DuplicateDispositionSchema>;
+
+export const ModeratorDecisionSchema = z.object({
+  decision: ReviewDecision,
+  comments: z.string().min(1).max(5000),
+  totpToken: z.string().length(6).regex(/^\d{6}$/),
+});
+export type ModeratorDecisionInput = z.infer<typeof ModeratorDecisionSchema>;
+
+export const ReassignReviewerSchema = z.object({
+  assignmentId: z.string().uuid(),
+  newReviewerId: z.string().uuid(),
+  reason: z.string().min(5).max(1000),
+});
+export type ReassignReviewerInput = z.infer<typeof ReassignReviewerSchema>;
+
+export const RetireQuestionSchema = z.object({
+  reason: RetirementReason,
+  note: z.string().min(5).max(1000),
+});
+export type RetireQuestionInput = z.infer<typeof RetireQuestionSchema>;
+
+// ── Step 2: Author Revision & Feedback ─────────────────────────────
+export const CreateNewVersionSchema = z.object({
+  parentVersionId: z.string().uuid(),
+  changeJustification: z.string().min(15, 'Change justification must be at least 15 characters').max(5000),
+  content: QuestionContentSchema,
+  answerKey: AnswerKeySchema,
+  metadata: QuestionMetadataSchema,
+});
+export type CreateNewVersionInput = z.infer<typeof CreateNewVersionSchema>;
+
+// ── Step 2: Conflict Declarations ──────────────────────────────────
+export const ConflictDeclarationSchema = z.object({
+  conflictType: z.enum(['INSTITUTION', 'COACHING_CENTRE', 'PERSON', 'SOURCE']),
+  description: z.string().min(2).max(1000),
+});
+export type ConflictDeclarationInput = z.infer<typeof ConflictDeclarationSchema>;
+
+// ── Step 2: Corpus Import ──────────────────────────────────────────
+export const CorpusImportSchema = z.object({
+  name: z.string().min(2).max(255),
+  sourceType: z.enum(['PAST_PAPER', 'PUBLIC']),
+  licenseNote: z.string().max(1000).optional(),
+  documents: z.array(
+    z.object({
+      title: z.string().min(1).max(255),
+      identifier: z.string().min(1).max(100),
+      content: z.string().min(1),
+    })
+  ).min(1),
+});
+export type CorpusImportInput = z.infer<typeof CorpusImportSchema>;
+
+// ── Step 2: Signed Approval Verification ───────────────────────────
+export const ApprovalRecordSchema = z.object({
+  id: z.string().uuid(),
+  questionId: z.string().uuid(),
+  versionNo: z.number().int(),
+  contentCommitment: z.string(),
+  decision: z.string(),
+  role: z.string(),
+  approverId: z.string().uuid(),
+  reviewRound: z.number().int(),
+  policyVersion: z.number().int(),
+  timestamp: z.string().datetime(),
+  signature: z.string(),
+  validSignature: z.boolean(),
+});
+export type ApprovalRecord = z.infer<typeof ApprovalRecordSchema>;
+
+export const ApprovalVerificationResponseSchema = z.object({
+  questionId: z.string().uuid(),
+  versionNo: z.number().int(),
+  contentCommitment: z.string(),
+  approvals: z.array(ApprovalRecordSchema),
+  allSignaturesValid: z.boolean(),
+  meetsPolicyRequirements: z.boolean(),
+  isEligible: z.boolean(),
+});
+export type ApprovalVerificationResponse = z.infer<typeof ApprovalVerificationResponseSchema>;
+
+// ── Step 4: Eligible Questions Feed (Metadata Only) ────────────────
+export const EligibleQuestionSchema = z.object({
+  questionId: z.string().uuid(),
+  versionId: z.string().uuid(),
+  humanId: z.string(),
+  versionNo: z.number().int(),
+  subjectId: z.string().uuid(),
+  topicId: z.string().uuid().nullable().optional(),
+  type: QuestionType,
+  difficulty: z.number(),
+  marks: z.number(),
+  negativeMarks: z.number(),
+  contentCommitment: z.string(),
+  approvedAt: z.string().datetime(),
+});
+export type EligibleQuestion = z.infer<typeof EligibleQuestionSchema>;
+
