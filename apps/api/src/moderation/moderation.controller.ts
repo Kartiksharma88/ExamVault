@@ -24,8 +24,8 @@ export class ModerationController {
   @Get('queue')
   @Roles('MODERATOR', 'ADMIN')
   @ApiOperation({ summary: 'Get unified moderator console queues' })
-  async getQueue() {
-    const queue = await this.moderationService.getModeratorQueue();
+  async getQueue(@Req() req: Request) {
+    const queue = await this.moderationService.getModeratorQueue(req.userId);
     return { success: true, data: queue };
   }
 

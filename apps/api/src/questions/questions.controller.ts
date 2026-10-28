@@ -55,6 +55,23 @@ export class QuestionsController {
     return { success: true, data: result };
   }
 
+  @Patch(':id/workflow-lock')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Lock or unlock a question workflow (ADMIN only)' })
+  async toggleWorkflowLock(
+    @Param('id') id: string,
+    @Body() body: { isLocked: boolean; reason?: string },
+    @Req() req: Request,
+  ) {
+    const result = await this.questionsService.toggleLock(
+      id,
+      body.isLocked,
+      body.reason,
+      req.userId!,
+    );
+    return { success: true, data: result };
+  }
+
   @Get()
   @Roles('EXAMINER', 'REVIEWER', 'MODERATOR', 'ADMIN', 'AUDITOR')
   @ApiOperation({ summary: 'List questions — metadata only, filtered by role' })

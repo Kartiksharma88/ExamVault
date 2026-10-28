@@ -1,7 +1,7 @@
 # Experiment D: Operational Complexity Comparison
 
 **ExamVault Research Prototype — Step 3 Audit Layer Evaluation**  
-Date: 2026-10-28T13:42:34.352Z  
+Date: 2026-10-28T14:31:04.344Z  
 Scope: Measured quantitative facts on deployment, configuration surface, runtime footprint, and recovery effort.
 
 ---

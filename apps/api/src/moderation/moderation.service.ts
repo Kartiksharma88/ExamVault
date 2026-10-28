@@ -32,17 +32,17 @@ export class ModerationService {
   /**
    * Get comprehensive moderator queue across all moderation stages
    */
-  async getModeratorQueue() {
+  async getModeratorQueue(moderatorId?: string) {
     const now = new Date();
 
     // 1. Duplicate flags
     const duplicateFlags = await this.prisma.questionVersion.findMany({
       where: { status: 'DUPLICATE_FLAGGED' },
       include: {
-        question: { include: { subject: true, topic: true } },
+        question: { include: { subject: true, topic: true, author: { select: { id: true, name: true, email: true } } } },
         originalityReport: { include: { matches: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     // 2. Blind answer disagreements
@@ -55,18 +55,18 @@ export class ModerationService {
         assignment: { include: { reviewer: { select: { id: true, name: true, email: true } } } },
         questionVersion: {
           include: {
-            question: { include: { subject: true, topic: true } },
+            question: { include: { subject: true, topic: true, author: { select: { id: true, name: true, email: true } } } },
           },
         },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     // 3. Ready for final approval (status === MODERATION)
     const readyForApproval = await this.prisma.questionVersion.findMany({
       where: { status: 'MODERATION' },
       include: {
-        question: { include: { subject: true, topic: true } },
+        question: { include: { subject: true, topic: true, author: { select: { id: true, name: true, email: true } } } },
         reviews: {
           include: {
             assignment: { select: { reviewerId: true, assignedRole: true } },
@@ -74,7 +74,7 @@ export class ModerationService {
         },
         approvals: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     // 4. Overdue reviewer assignments
@@ -84,22 +84,84 @@ export class ModerationService {
         dueDate: { lt: now },
       },
       include: {
-        reviewer: { select: { id: true, name: true, email: true } },
+        reviewer: { select: { id: true, name: true, email: true, role: true } },
         questionVersion: {
-          include: { question: { include: { subject: true } } },
+          include: {
+            question: { include: { subject: true, topic: true, author: { select: { id: true, name: true, email: true } } } },
+          },
         },
+        review: true,
       },
       orderBy: { dueDate: 'asc' },
     });
 
-    // 5. Staffing warnings (READY_FOR_REVIEW questions with < required reviewers)
+    // 5. Staffing warnings (READY_FOR_REVIEW / SUBMITTED questions needing reviewers)
     const staffingWarnings = await this.prisma.questionVersion.findMany({
-      where: { status: 'READY_FOR_REVIEW' },
+      where: { status: { in: ['READY_FOR_REVIEW', 'SUBMITTED'] } },
       include: {
-        question: { include: { subject: true } },
+        question: { include: { subject: true, topic: true, author: { select: { id: true, name: true, email: true } } } },
+        reviewAssignments: {
+          include: {
+            reviewer: { select: { id: true, name: true, email: true, role: true } },
+          },
+        },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
+
+    // 6. Active In-Review Pipeline (UNDER_REVIEW, READY_FOR_REVIEW, SUBMITTED)
+    const activeReviews = await this.prisma.questionVersion.findMany({
+      where: {
+        status: { in: ['UNDER_REVIEW', 'READY_FOR_REVIEW', 'SUBMITTED'] },
+      },
+      include: {
+        question: {
+          include: {
+            subject: true,
+            topic: true,
+            author: { select: { id: true, name: true, email: true } },
+          },
+        },
+        reviewAssignments: {
+          include: {
+            reviewer: { select: { id: true, name: true, email: true, role: true } },
+            review: {
+              select: {
+                id: true,
+                phase: true,
+                decision: true,
+                disagreementFlag: true,
+              },
+            },
+          },
+        },
+        approvals: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    // 7. My Assigned Reviews (Direct assignments for the logged-in moderator)
+    const myAssignedReviews = moderatorId
+      ? await this.prisma.reviewAssignment.findMany({
+          where: { reviewerId: moderatorId },
+          include: {
+            questionVersion: {
+              include: {
+                question: {
+                  include: {
+                    subject: true,
+                    topic: true,
+                    author: { select: { id: true, name: true, email: true } },
+                  },
+                },
+              },
+            },
+            review: true,
+          },
+          orderBy: { dueDate: 'asc' },
+        })
+      : [];
 
     return {
       duplicateFlags,
@@ -107,6 +169,8 @@ export class ModerationService {
       readyForApproval,
       overdueAssignments,
       staffingWarnings,
+      activeReviews,
+      myAssignedReviews,
     };
   }
 

@@ -28,6 +28,8 @@ interface Assignment {
   type?: string;
   language?: string;
   questionVersion?: any;
+  isLocked?: boolean;
+  lockReason?: string;
 }
 
 interface WorkspaceData {
@@ -40,6 +42,8 @@ interface WorkspaceData {
   difficulty: number;
   type: string;
   language: string;
+  isLocked?: boolean;
+  lockReason?: string;
   phase: 'SOLVE' | 'EVALUATE' | 'COMPLETED' | 'SUBMITTED' | string;
   stem: string;
   options: { label: string; text: string }[];
@@ -239,7 +243,7 @@ export const ReviewerWorkspace: React.FC = () => {
   if (loading) {
     return (
       <div className="w-full bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-xs space-y-3 my-8">
-        <div className="inline-flex p-3 rounded-full bg-blue-50 text-blue-600 mb-1">
+        <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
           <Loader2 className="w-7 h-7 animate-spin" />
         </div>
         <h3 className="text-base font-bold text-slate-900">Loading Blind Review Queue...</h3>
@@ -267,7 +271,7 @@ export const ReviewerWorkspace: React.FC = () => {
               disabled={loading}
               className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-red-600' : ''}`} />
               <span>{loading ? 'Refreshing...' : 'Refresh Queue'}</span>
             </button>
             <span className="flex items-center text-xs font-mono bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-md font-medium">
@@ -353,6 +357,11 @@ export const ReviewerWorkspace: React.FC = () => {
                           >
                             {item.status}
                           </span>
+                          {item.isLocked && (
+                            <span className="ml-1.5 text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                              LOCKED
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-xs font-mono text-slate-500">
                           {new Date(item.dueDate).toLocaleDateString()}
@@ -421,6 +430,12 @@ export const ReviewerWorkspace: React.FC = () => {
             <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-red-50 text-red-700 border border-red-200">
               {workspace.subject?.name || (workspace as any).metadata?.subject?.name || 'General'}
             </span>
+            {workspace.isLocked && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center space-x-1">
+                <Lock className="w-3 h-3" />
+                <span>WORKFLOW SUSPENDED</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -468,6 +483,18 @@ export const ReviewerWorkspace: React.FC = () => {
         </div>
         <span className="font-mono text-[10px] text-slate-400">Policy: IEEE/JAC-Blind-2025</span>
       </div>
+
+      {workspace.isLocked && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <div>
+            <span className="font-bold block text-sm">Workflow Suspended by Administration</span>
+            <p className="mt-0.5">
+              This question workflow is currently locked/suspended ({workspace.lockReason || 'Administrative dispute investigation'}). Submissions and evaluations are frozen until released by an administrator.
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 flex items-center space-x-2">
@@ -630,7 +657,7 @@ export const ReviewerWorkspace: React.FC = () => {
               </div>
 
               <button
-                disabled={!selectedOption || actionLoading}
+                disabled={!selectedOption || actionLoading || Boolean(workspace.isLocked)}
                 onClick={handleSubmitBlindAnswer}
                 className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold rounded-lg shadow-xs transition-colors"
               >
@@ -792,7 +819,7 @@ export const ReviewerWorkspace: React.FC = () => {
                 </div>
               ) : (
                 <button
-                  disabled={actionLoading || !comments.trim()}
+                  disabled={actionLoading || !comments.trim() || Boolean(workspace.isLocked)}
                   onClick={() => setShowMfaModal(true)}
                   className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold rounded-lg shadow-xs transition-colors"
                 >

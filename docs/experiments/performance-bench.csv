@@ -1,23 +1,23 @@
 Metric,Parameter,Value,Unit
-Latency p50,Concurrency 10,0.05,ms
-Latency p95,Concurrency 10,0.13,ms
-Latency p99,Concurrency 10,297.23,ms
-Throughput,Concurrency 10,166.6,ops/sec
-Latency p50,Concurrency 50,0.07,ms
-Latency p95,Concurrency 50,0.15,ms
-Latency p99,Concurrency 50,0.55,ms
-Throughput,Concurrency 50,10627.9,ops/sec
+Latency p50,Concurrency 10,0.04,ms
+Latency p95,Concurrency 10,0.11,ms
+Latency p99,Concurrency 10,0.47,ms
+Throughput,Concurrency 10,17337.6,ops/sec
+Latency p50,Concurrency 50,0.04,ms
+Latency p95,Concurrency 50,0.08,ms
+Latency p99,Concurrency 50,0.47,ms
+Throughput,Concurrency 50,18674,ops/sec
 Latency p50,Concurrency 100,0.04,ms
-Latency p95,Concurrency 100,0.09,ms
-Latency p99,Concurrency 100,0.24,ms
-Throughput,Concurrency 100,14339,ops/sec
-Bulk Merkle Overhead,Batch Size 10,179.9,us/event
-Bulk Merkle Overhead,Batch Size 50,25.7,us/event
-Bulk Merkle Overhead,Batch Size 100,26.2,us/event
-Bulk Merkle Overhead,Batch Size 500,33.1,us/event
-Bulk Merkle Overhead,Batch Size 1000,27.8,us/event
-Verifier Time,Log Size 100,3.2,ms
-Verifier Time,Log Size 500,16,ms
-Verifier Time,Log Size 1000,21.8,ms
-Verifier Time,Log Size 2500,59.6,ms
-Verifier Time,Log Size 5000,99.4,ms
+Latency p95,Concurrency 100,0.05,ms
+Latency p99,Concurrency 100,0.2,ms
+Throughput,Concurrency 100,21742,ops/sec
+Bulk Merkle Overhead,Batch Size 10,77.1,us/event
+Bulk Merkle Overhead,Batch Size 50,18.2,us/event
+Bulk Merkle Overhead,Batch Size 100,39.9,us/event
+Bulk Merkle Overhead,Batch Size 500,10.1,us/event
+Bulk Merkle Overhead,Batch Size 1000,19.4,us/event
+Verifier Time,Log Size 100,3.4,ms
+Verifier Time,Log Size 500,8.6,ms
+Verifier Time,Log Size 1000,17.9,ms
+Verifier Time,Log Size 2500,40.6,ms
+Verifier Time,Log Size 5000,120.5,ms

@@ -251,6 +251,8 @@ export class ReviewService {
                 language: true,
                 subject: { select: { id: true, name: true, code: true } },
                 topic: { select: { id: true, name: true } },
+                isLocked: true,
+                lockReason: true,
               },
             },
           },
@@ -283,6 +285,8 @@ export class ReviewService {
         marks: q?.marks,
         negativeMarks: q?.negativeMarks,
         language: q?.language,
+        isLocked: q?.isLocked || false,
+        lockReason: q?.lockReason || null,
       };
     });
   }
@@ -461,6 +465,8 @@ export class ReviewService {
         negativeMarks: version.question.negativeMarks,
         language: version.question.language,
       },
+      isLocked: version.question.isLocked || false,
+      lockReason: version.question.lockReason || null,
     };
   }
 
@@ -476,10 +482,16 @@ export class ReviewService {
     const assignment = await this.prisma.reviewAssignment.findUniqueOrThrow({
       where: { id: assignmentId },
       include: {
-        questionVersion: true,
+        questionVersion: { include: { question: true } },
         review: true,
       },
     });
+
+    if (assignment.questionVersion.question?.isLocked) {
+      throw new ForbiddenException(
+        `Question workflow is currently locked/suspended: ${assignment.questionVersion.question.lockReason || 'Administrative freeze'}`,
+      );
+    }
 
     if (assignment.reviewerId !== reviewerId) {
       throw new ForbiddenException('You can only submit reviews for your own assignments');
@@ -608,6 +620,12 @@ export class ReviewService {
 
     if (assignment.reviewerId !== reviewerId) {
       throw new ForbiddenException('You can only submit reviews for your own assignments');
+    }
+
+    if (assignment.questionVersion.question?.isLocked) {
+      throw new ForbiddenException(
+        `Question workflow is currently locked/suspended: ${assignment.questionVersion.question.lockReason || 'Administrative freeze'}`,
+      );
     }
 
     if (assignment.questionVersion.authorId === reviewerId) {
@@ -799,5 +817,139 @@ export class ReviewService {
     }
 
     return false;
+  }
+
+  /**
+   * Admin / Moderator manually assigns a reviewer to a question
+   */
+  async assignSingleReviewer(
+    questionId: string,
+    reviewerId: string,
+    assignedById: string,
+  ) {
+    const question = await this.prisma.question.findUniqueOrThrow({
+      where: { id: questionId },
+      include: {
+        versions: { orderBy: { versionNo: 'desc' }, take: 1 },
+        subject: true,
+      },
+    });
+
+    if (question.isLocked) {
+      throw new BadRequestException('Question workflow is currently locked/suspended.');
+    }
+
+    const version = question.versions[0];
+    if (!version) {
+      throw new NotFoundException('Question has no versions.');
+    }
+
+    const reviewer = await this.prisma.user.findUniqueOrThrow({
+      where: { id: reviewerId },
+    });
+
+    if (reviewer.role !== 'REVIEWER' && reviewer.role !== 'MODERATOR') {
+      throw new BadRequestException('Assigned user must be a REVIEWER or MODERATOR.');
+    }
+
+    if (version.authorId === reviewerId) {
+      throw new BadRequestException('Author cannot review their own question.');
+    }
+
+    // Find or create active round
+    let round = await this.prisma.reviewRound.findFirst({
+      where: { questionVersionId: version.id, status: 'ACTIVE' },
+    });
+
+    if (!round) {
+      round = await this.prisma.reviewRound.create({
+        data: {
+          questionVersionId: version.id,
+          roundNumber: 1,
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    // Check if already assigned
+    let assignment = await this.prisma.reviewAssignment.findUnique({
+      where: {
+        roundId_reviewerId: {
+          roundId: round.id,
+          reviewerId,
+        },
+      },
+    });
+
+    const dueDate = new Date(Date.now() + 7 * 86400000);
+    const selectionSeed = crypto.randomBytes(32).toString('hex');
+
+    if (!assignment) {
+      assignment = await this.prisma.reviewAssignment.create({
+        data: {
+          roundId: round.id,
+          questionVersionId: version.id,
+          reviewerId,
+          assignedRole: reviewer.role === 'MODERATOR' ? 'MODERATOR' : 'REVIEWER',
+          status: 'PENDING',
+          dueDate,
+          selectionSeed,
+          eligibleCount: 1,
+        },
+      });
+
+      await this.prisma.review.create({
+        data: {
+          assignmentId: assignment.id,
+          questionVersionId: version.id,
+          reviewerId,
+          phase: 'SOLVE',
+          contentCommitment: version.contentCommitment,
+        },
+      });
+
+      await this.prisma.notification.create({
+        data: {
+          userId: reviewerId,
+          type: 'REVIEW_ASSIGNED',
+          title: 'New Blind Review Assigned',
+          message: `You have been assigned to review question ${question.humanId}. Due on ${dueDate.toLocaleDateString()}.`,
+          link: `/review/workspace/${assignment.id}`,
+        },
+      });
+    }
+
+    // Update status to UNDER_REVIEW
+    if (['DRAFT', 'SUBMITTED', 'READY_FOR_REVIEW'].includes(version.status)) {
+      await this.prisma.questionVersion.update({
+        where: { id: version.id },
+        data: { status: 'UNDER_REVIEW' },
+      });
+    }
+
+    await this.audit.log({
+      actorId: assignedById,
+      action: 'REVIEWER_ASSIGNMENT',
+      targetType: 'question_version',
+      targetId: version.id,
+      metadata: {
+        questionId,
+        humanId: question.humanId,
+        reviewerId,
+        reviewerName: reviewer.name,
+        roundId: round.id,
+        assignmentId: assignment.id,
+      },
+    });
+
+    return {
+      assignmentId: assignment.id,
+      reviewerId: reviewer.id,
+      reviewerName: reviewer.name,
+      questionId: question.id,
+      humanId: question.humanId,
+      status: 'PENDING',
+      dueDate,
+    };
   }
 }

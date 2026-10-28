@@ -1,7 +1,7 @@
 # Experiment B: Performance Benchmarks & Storage Growth
 
 **ExamVault Research Prototype — Step 3 Audit Layer Evaluation**  
-Date: 2026-10-28T13:41:49.873Z  
+Date: 2026-10-28T14:31:02.374Z  
 Repetitions: 5 repetitions with warm-up runs  
 Hardware: Intel(R) Core(TM) i7-5600U CPU @ 2.60GHz (4 cores, 7.9 GB RAM)  
 OS: Windows_NT 10.0.19045 (x64)  
@@ -14,9 +14,9 @@ For individual critical security events (e.g. `QUESTION_VERSION_COMMITTED`, `APP
 
 | Concurrency | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (ops/sec) |
 |-------------|-----------|----------|----------|----------|----------------------|
-| 10 | 6 ms | 0.05 ms | 0.13 ms | 297.23 ms | **166.6** ops/s |
-| 50 | 0.09 ms | 0.07 ms | 0.15 ms | 0.55 ms | **10,627.9** ops/s |
-| 100 | 0.07 ms | 0.04 ms | 0.09 ms | 0.24 ms | **14,339** ops/s |
+| 10 | 0.06 ms | 0.04 ms | 0.11 ms | 0.47 ms | **17,337.6** ops/s |
+| 50 | 0.05 ms | 0.04 ms | 0.08 ms | 0.47 ms | **18,674** ops/s |
+| 100 | 0.05 ms | 0.04 ms | 0.05 ms | 0.2 ms | **21,742** ops/s |
 
 *Note on Design A (Fabric)*: In async outbox mode, the application user path is not blocked on Fabric block commit latency (~500ms - 2000ms block cutting time). The client receives immediate HTTP 201 response while the background outbox worker asynchronously commits to Fabric.
 
@@ -28,11 +28,11 @@ Bulk events (e.g. content reads, user logins) are grouped into batches of size $
 
 | Batch Size ($N$) | Total Tree Generation (ms) | Overhead Per Event (μs) |
 |------------------|----------------------------|-------------------------|
-| 10 | 1.8 ms | **179.9 μs/event** |
-| 50 | 1.28 ms | **25.7 μs/event** |
-| 100 | 2.62 ms | **26.2 μs/event** |
-| 500 | 16.57 ms | **33.1 μs/event** |
-| 1000 | 27.78 ms | **27.8 μs/event** |
+| 10 | 0.77 ms | **77.1 μs/event** |
+| 50 | 0.91 ms | **18.2 μs/event** |
+| 100 | 3.99 ms | **39.9 μs/event** |
+| 500 | 5.07 ms | **10.1 μs/event** |
+| 1000 | 19.37 ms | **19.4 μs/event** |
 
 ---
 
@@ -55,11 +55,11 @@ Measuring full end-to-end verification of cryptographic hash chains across vario
 
 | Log Size (Events) | Total Verification Time (ms) | Verification Speed (events/sec) |
 |-------------------|-----------------------------|---------------------------------|
-| 100 | 3.2 ms | **31,268.6 events/s** |
-| 500 | 16 ms | **31,293.4 events/s** |
-| 1,000 | 21.8 ms | **45,857.7 events/s** |
-| 2,500 | 59.6 ms | **41,964.8 events/s** |
-| 5,000 | 99.4 ms | **50,324.6 events/s** |
+| 100 | 3.4 ms | **29,447.3 events/s** |
+| 500 | 8.6 ms | **57,973.7 events/s** |
+| 1,000 | 17.9 ms | **55,883.1 events/s** |
+| 2,500 | 40.6 ms | **61,563.8 events/s** |
+| 5,000 | 120.5 ms | **41,485 events/s** |
 
 ---
 

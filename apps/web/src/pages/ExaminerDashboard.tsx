@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Loader2,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 
 interface QuestionItem {
@@ -23,6 +24,8 @@ interface QuestionItem {
   humanId: string;
   authorId: string;
   status: 'DRAFT' | 'SUBMITTED' | 'WITHDRAWN';
+  isLocked?: boolean;
+  lockReason?: string;
   currentVersion: number;
   type?: string;
   difficulty?: number;
@@ -123,10 +126,11 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
   // Filtered by search
   const filteredQuestions = questions.filter((q) => {
     if (!searchQuery) return true;
-    const qStr = searchQuery.toLowerCase();
+    const qStr = searchQuery.toLowerCase().trim().replace(/^#/, '');
     const type = q.metadata?.type || q.type || '';
     const cog = q.metadata?.cognitiveLevel || q.cognitiveLevel || '';
     return (
+      q.id.toLowerCase().includes(qStr) ||
       q.humanId.toLowerCase().includes(qStr) ||
       cog.toLowerCase().includes(qStr) ||
       type.toLowerCase().includes(qStr)
@@ -280,8 +284,18 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
             return (
               <div
                 key={q.id}
-                onClick={() => onEditQuestion(q.id)}
-                className="bg-white rounded-xl p-4 border border-slate-200 hover:border-slate-300 hover:shadow-md cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                onClick={() => {
+                  if (q.isLocked) {
+                    alert(`Question ${q.humanId} workflow is currently LOCKED / SUSPENDED by administration (${q.lockReason || 'Administrative freeze'}). Editing is temporarily disabled.`);
+                    return;
+                  }
+                  onEditQuestion(q.id);
+                }}
+                className={`rounded-xl p-4 border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
+                  q.isLocked
+                    ? 'border-rose-200 bg-rose-50/25 cursor-not-allowed'
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-md cursor-pointer'
+                }`}
               >
                 {/* Left meta info */}
                 <div className="space-y-2 flex-1">
@@ -290,16 +304,29 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
                       {q.humanId}
                     </span>
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        isDraft
-                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                          : isSubmitted
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}
+                      title={`Opaque Question Reference ID: ${q.id} (Zero-knowledge ledger tracking)`}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200"
                     >
-                      {q.status}
+                      Ref #{q.id.slice(0, 8)}
                     </span>
+                    {q.isLocked ? (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center space-x-1">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>WORKFLOW SUSPENDED</span>
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          isDraft
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : isSubmitted
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}
+                      >
+                        {q.status}
+                      </span>
+                    )}
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200">
                       {q.metadata?.type || q.type}
                     </span>

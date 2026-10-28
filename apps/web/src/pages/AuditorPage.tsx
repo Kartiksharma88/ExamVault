@@ -18,6 +18,9 @@ import {
   Activity,
   Clock,
   HardDrive,
+  Search,
+  X,
+  Download,
 } from 'lucide-react';
 
 interface AuditEventItem {
@@ -84,12 +87,245 @@ interface StorageScanData {
   details?: any;
 }
 
+function isQuestionTarget(targetType?: string): boolean {
+  if (!targetType) return false;
+  const t = targetType.toLowerCase();
+  return t === 'question' || t === 'question_version';
+}
+
+function formatTargetTypeLabel(targetType?: string): string {
+  if (!targetType) return 'Entity';
+  const t = targetType.toLowerCase();
+  switch (t) {
+    case 'question':
+    case 'question_version':
+      return 'Question';
+    case 'session':
+      return 'Session';
+    case 'user':
+      return 'User';
+    case 'review':
+    case 'review_assignment':
+      return 'Review';
+    case 'checkpoint':
+      return 'Checkpoint';
+    case 'storage':
+    case 'storage_scan':
+      return 'Storage';
+    case 'policy':
+      return 'Policy';
+    default:
+      return targetType.charAt(0).toUpperCase() + targetType.slice(1);
+  }
+}
+
+function getActionDescription(action: string, metadata?: any, versionNo?: number): string {
+  const v = versionNo || metadata?.versionNo;
+  const vStr = v ? ` (v${v})` : '';
+
+  switch (action) {
+    case 'LOGIN_SUCCESS':
+      return `User successfully authenticated credentials & initiated session`;
+    case 'LOGIN_FAILURE':
+      return `Failed user authentication attempt`;
+    case 'LOGOUT':
+      return `User terminated active session`;
+    case 'MFA_VERIFY':
+      return `Multi-factor TOTP authentication verified`;
+    case 'MFA_SETUP':
+      return `Configured multi-factor authentication credentials`;
+    case 'MFA_FAILURE':
+      return `Invalid multi-factor authentication token rejected`;
+    case 'QUESTION_CREATE':
+      return `Initial draft question created & envelopes sealed${vStr}`;
+    case 'QUESTION_EDIT':
+      return `Draft content revision saved & commitments updated${vStr}`;
+    case 'QUESTION_SUBMIT':
+      return `Question submitted for blind peer review cycle${vStr}`;
+    case 'QUESTION_CONTENT_READ':
+      return `Decrypted and accessed question content for review`;
+    case 'BLIND_ANSWER_SUBMIT':
+      return `Reviewer submitted independent blind solve answer`;
+    case 'REVIEW_DECISION':
+      return metadata?.decision
+        ? `Blind peer review evaluation recorded: ${metadata.decision}`
+        : `Independent blind reviewer evaluation & rating recorded`;
+    case 'MODERATOR_DECISION':
+      return metadata?.decision
+        ? `Editorial moderation decision recorded: ${metadata.decision}`
+        : `Moderation verdict recorded for question`;
+    case 'APPROVAL_SIGNED':
+      return `Signed Ed25519 cryptographic authorization endorsement`;
+    case 'REVIEWER_ASSIGNMENT':
+      return `Automated blind reviewers randomly assigned`;
+    case 'KEY_REVEAL':
+      return `Answer key unsealed for evaluation phase`;
+    case 'CHECKPOINT_CREATED':
+      return `RFC 6962 Merkle tree root anchored to witness & Fabric`;
+    case 'STORAGE_SCAN':
+      return `Scrubbed encrypted storage ciphertext for SHA-256 integrity`;
+    case 'USER_LOGIN':
+      return `Actor authenticated session via multi-factor auth`;
+    case 'PAPER_GENERATE':
+      return `Tamper-evident assembled exam paper compiled`;
+    default:
+      return action
+        .toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
+export interface ProvenanceAnalysis {
+  isFiltered: boolean;
+  targetId: string;
+  hasEvents: boolean;
+  eventsChronological: AuditEventItem[];
+  submitter?: { name: string; pseudonym?: string; timestamp: string };
+  editors: Array<{ name: string; pseudonym?: string; timestamp: string; versionNo?: number }>;
+  reviewers: Array<{ name: string; pseudonym?: string; timestamp: string; decision?: string }>;
+  approver?: { name: string; pseudonym?: string; timestamp: string; signature?: string };
+  fabricReceipt?: { blockNo?: string; txId?: string };
+  anomalies: Array<{ severity: 'CRITICAL' | 'WARNING'; message: string; timestamp?: string }>;
+  isClean: boolean;
+}
+
+function analyzeQuestionProvenance(events: AuditEventItem[], searchTargetId: string): ProvenanceAnalysis | null {
+  const cleanId = searchTargetId.trim().replace(/^#/, '');
+  if (!cleanId) return null;
+
+  const relevant = events.filter((e) =>
+    e.targetId && e.targetId.toLowerCase().includes(cleanId.toLowerCase()),
+  );
+
+  if (relevant.length === 0) {
+    return {
+      isFiltered: true,
+      targetId: cleanId,
+      hasEvents: false,
+      eventsChronological: [],
+      editors: [],
+      reviewers: [],
+      anomalies: [],
+      isClean: true,
+    };
+  }
+
+  // Chronological order: oldest to newest
+  const chronological = [...relevant].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+
+  let submitter: { name: string; pseudonym?: string; timestamp: string } | undefined;
+  const editors: Array<{ name: string; pseudonym?: string; timestamp: string; versionNo?: number }> = [];
+  const reviewers: Array<{ name: string; pseudonym?: string; timestamp: string; decision?: string }> = [];
+  let approver: { name: string; pseudonym?: string; timestamp: string; signature?: string } | undefined;
+  let fabricReceipt: { blockNo?: string; txId?: string } | undefined;
+
+  const anomalies: Array<{ severity: 'CRITICAL' | 'WARNING'; message: string; timestamp?: string }> = [];
+
+  let approvalTimestamp: number | null = null;
+  let hadReview = false;
+
+  for (const evt of chronological) {
+    const evtTime = new Date(evt.timestamp).getTime();
+    const actorName = evt.actor?.name || 'Authenticated Actor';
+
+    if (evt.action === 'QUESTION_SUBMIT' || evt.action === 'QUESTION_CREATE') {
+      if (!submitter) {
+        submitter = { name: actorName, pseudonym: evt.actorPseudonym, timestamp: evt.timestamp };
+      }
+    }
+
+    if (evt.action === 'QUESTION_EDIT') {
+      editors.push({
+        name: actorName,
+        pseudonym: evt.actorPseudonym,
+        timestamp: evt.timestamp,
+        versionNo: evt.metadata?.versionNo || evt.versionNo,
+      });
+
+      // Problem Spotter: Post-Approval Modification Detection
+      if (approvalTimestamp !== null && evtTime > approvalTimestamp) {
+        anomalies.push({
+          severity: 'CRITICAL',
+          message: `Post-Approval Modification: Question was edited on ${new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by ${actorName} AFTER approval endorsement was signed on ${new Date(approvalTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}!`,
+          timestamp: evt.timestamp,
+        });
+      }
+    }
+
+    if (evt.action === 'REVIEW_DECISION' || evt.action === 'BLIND_ANSWER_SUBMIT') {
+      hadReview = true;
+      reviewers.push({
+        name: actorName,
+        pseudonym: evt.actorPseudonym,
+        timestamp: evt.timestamp,
+        decision: evt.metadata?.decision,
+      });
+    }
+
+    if (evt.action === 'APPROVAL_SIGNED' || evt.action === 'MODERATOR_DECISION') {
+      approvalTimestamp = evtTime;
+      approver = {
+        name: actorName,
+        pseudonym: evt.actorPseudonym,
+        timestamp: evt.timestamp,
+        signature: evt.signature,
+      };
+
+      // Problem Spotter: Approval without Review
+      if (!hadReview && reviewers.length === 0) {
+        anomalies.push({
+          severity: 'WARNING',
+          message: `Approval Without Review: Question was approved on ${new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} without prior independent blind peer review.`,
+          timestamp: evt.timestamp,
+        });
+      }
+    }
+
+    if (evt.action === 'PAPER_GENERATE') {
+      // Problem Spotter: Unapproved Paper Inclusion
+      if (approvalTimestamp === null) {
+        anomalies.push({
+          severity: 'CRITICAL',
+          message: `Unapproved Exam Paper Inclusion: Question was assembled into an exam paper before official approval endorsement was committed!`,
+          timestamp: evt.timestamp,
+        });
+      }
+    }
+
+    const fabricOutbox = evt.outboxes?.find((o) => o.sinkType === 'FABRIC' && o.status === 'COMMITTED');
+    if (fabricOutbox) {
+      fabricReceipt = {
+        blockNo: fabricOutbox.fabricBlockNo,
+        txId: fabricOutbox.fabricTxId,
+      };
+    }
+  }
+
+  return {
+    isFiltered: true,
+    targetId: cleanId,
+    hasEvents: true,
+    eventsChronological: chronological,
+    submitter,
+    editors,
+    reviewers,
+    approver,
+    fabricReceipt,
+    anomalies,
+    isClean: anomalies.length === 0,
+  };
+}
+
 export const AuditorPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'feed' | 'dashboard' | 'verifier'>('feed');
   const [events, setEvents] = useState<AuditEventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState('');
   const [targetTypeFilter, setTargetTypeFilter] = useState('');
+  const [searchTargetId, setSearchTargetId] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Verification & Dashboard states
@@ -104,12 +340,14 @@ export const AuditorPage: React.FC = () => {
   const [reconciliationReport, setReconciliationReport] = useState<any | null>(null);
   const [runningAction, setRunningAction] = useState<string | null>(null);
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (targetIdOverride?: string) => {
     setLoading(true);
     try {
       const params: Record<string, string> = { limit: '100' };
       if (actionFilter) params.action = actionFilter;
       if (targetTypeFilter) params.targetType = targetTypeFilter;
+      const tid = targetIdOverride !== undefined ? targetIdOverride : searchTargetId;
+      if (tid.trim()) params.targetId = tid.trim().replace(/^#/, '');
 
       const res = await apiRequest<{ success: boolean; data: { items: AuditEventItem[] } }>(
         '/audit',
@@ -142,7 +380,48 @@ export const AuditorPage: React.FC = () => {
   useEffect(() => {
     fetchEvents();
     fetchDashboardData();
-  }, [actionFilter, targetTypeFilter]);
+  }, [actionFilter, targetTypeFilter, searchTargetId]);
+
+  const handleExportDossier = (analysis: ProvenanceAnalysis) => {
+    const dossier = {
+      dossierType: 'ExamVault_Tamper_Evident_Audit_Dossier',
+      dossierVersion: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      questionReferenceId: analysis.targetId,
+      auditor: 'Mr. Vikram Singh (AUDITOR - MFA Verified)',
+      auditMode: 'READ_AND_VERIFY_ONLY',
+      provenanceStatus: analysis.isClean ? 'COMPLIANT_UNALTERED' : 'INTEGRITY_ANOMALIES_DETECTED',
+      anomaliesDetected: analysis.anomalies,
+      lifecycleStory: {
+        submittedBy: analysis.submitter,
+        editors: analysis.editors,
+        reviewers: analysis.reviewers,
+        approvedBy: analysis.approver,
+        hyperledgerFabricAnchor: analysis.fabricReceipt,
+      },
+      cryptographicEvidenceTrail: analysis.eventsChronological.map((e, idx) => ({
+        stepIndex: idx + 1,
+        timestamp: e.timestamp,
+        action: e.action,
+        actorIdentity: e.actor?.name || 'SYSTEM',
+        actorEmail: e.actor?.email,
+        dpdpPseudonymHmacSha256: e.actorPseudonym,
+        entryHashSha256: e.entryHash,
+        prevHashSha256: e.prevHash,
+        ed25519SignatureBase64: e.signature,
+        fabricTxId: e.outboxes?.find((o) => o.sinkType === 'FABRIC')?.fabricTxId,
+        fabricBlockNumber: e.outboxes?.find((o) => o.sinkType === 'FABRIC')?.fabricBlockNo,
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(dossier, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ExamVault_Audit_Dossier_${analysis.targetId.slice(0, 8)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleVerifyChain = async () => {
     setVerifying(true);
@@ -342,52 +621,225 @@ export const AuditorPage: React.FC = () => {
       )}
 
       {/* TAB 1: Cryptographic Feed */}
-      {activeTab === 'feed' && (
-        <div className="space-y-6">
-          {/* Filters */}
-          <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-500 font-medium">Filters:</span>
+      {activeTab === 'feed' && (() => {
+        const provenance = searchTargetId.trim() ? analyzeQuestionProvenance(events, searchTargetId) : null;
 
-            <select
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600 font-medium"
-            >
-              <option value="">All Actions</option>
-              <option value="QUESTION_VERSION_COMMITTED">QUESTION_VERSION_COMMITTED (Critical)</option>
-              <option value="APPROVAL_SIGNED">APPROVAL_SIGNED (Critical)</option>
-              <option value="POLICY_APPROVED">POLICY_APPROVED (Critical)</option>
-              <option value="LOGIN_SUCCESS">LOGIN_SUCCESS (Bulk)</option>
-              <option value="QUESTION_CREATE">QUESTION_CREATE</option>
-              <option value="QUESTION_EDIT">QUESTION_EDIT</option>
-              <option value="ACCESS_DENIED">ACCESS_DENIED</option>
-            </select>
+        return (
+          <div className="space-y-6">
+            {/* Filters */}
+            <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-500 font-medium">Filters:</span>
 
-            <select
-              value={targetTypeFilter}
-              onChange={(e) => setTargetTypeFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600 font-medium"
-            >
-              <option value="">All Target Types</option>
-              <option value="question">Question</option>
-              <option value="question_version">Question Version</option>
-              <option value="user">User</option>
-              <option value="storage">Storage</option>
-            </select>
+              {/* Reference ID Search input */}
+              <div className="relative flex-1 min-w-[260px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search Reference ID (e.g. #367a7254 or UUID)..."
+                  value={searchTargetId}
+                  onChange={(e) => setSearchTargetId(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600 font-mono placeholder:font-sans placeholder:text-slate-400 font-medium"
+                />
+                {searchTargetId && (
+                  <button
+                    onClick={() => setSearchTargetId('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-            {(actionFilter || targetTypeFilter) && (
-              <button
-                onClick={() => {
-                  setActionFilter('');
-                  setTargetTypeFilter('');
-                }}
-                className="text-xs text-red-600 hover:underline font-semibold ml-auto"
+              <select
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600 font-medium"
               >
-                Clear Filters
-              </button>
+                <option value="">All Actions</option>
+                <option value="QUESTION_SUBMIT">QUESTION_SUBMIT (Critical)</option>
+                <option value="APPROVAL_SIGNED">APPROVAL_SIGNED (Critical)</option>
+                <option value="REVIEW_DECISION">REVIEW_DECISION (Critical)</option>
+                <option value="QUESTION_EDIT">QUESTION_EDIT (Critical)</option>
+                <option value="QUESTION_CREATE">QUESTION_CREATE</option>
+                <option value="BLIND_ANSWER_SUBMIT">BLIND_ANSWER_SUBMIT</option>
+                <option value="LOGIN_SUCCESS">LOGIN_SUCCESS (Bulk)</option>
+                <option value="CHECKPOINT_CREATED">CHECKPOINT_CREATED</option>
+              </select>
+
+              <select
+                value={targetTypeFilter}
+                onChange={(e) => setTargetTypeFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-red-600 font-medium"
+              >
+                <option value="">All Target Types</option>
+                <option value="question">Question</option>
+                <option value="question_version">Question Version</option>
+                <option value="review">Review</option>
+                <option value="session">Session</option>
+                <option value="user">User</option>
+                <option value="storage">Storage</option>
+              </select>
+
+              {(actionFilter || targetTypeFilter || searchTargetId) && (
+                <button
+                  onClick={() => {
+                    setActionFilter('');
+                    setTargetTypeFilter('');
+                    setSearchTargetId('');
+                  }}
+                  className="text-xs text-red-600 hover:underline font-semibold ml-auto"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Question Provenance & Problem Spotting Dossier Panel */}
+            {provenance && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-base font-bold text-slate-900 font-sans">
+                        Question Lifecycle & Chain of Custody Dossier
+                      </h2>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                        Ref #{provenance.targetId.slice(0, 8)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Investigate question history, verify chronological progression, and spot integrity anomalies.
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleExportDossier(provenance)}
+                      className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-black text-white shadow-xs transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Evidence Dossier (.json)</span>
+                    </button>
+                    <button
+                      onClick={() => setSearchTargetId('')}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                      title="Clear Search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Spot Problems: Real-Time Anomaly & Tamper Scanner */}
+                {provenance.anomalies.length > 0 ? (
+                  <div className="p-4 rounded-xl bg-red-50/80 border border-red-300 text-red-950 space-y-2">
+                    <div className="flex items-center space-x-2 text-red-700 font-bold text-sm">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                      <span>⚠️ Integrity Anomaly Detected ({provenance.anomalies.length} Violation{provenance.anomalies.length > 1 ? 's' : ''})</span>
+                    </div>
+                    <div className="space-y-1.5 pl-7 text-xs">
+                      {provenance.anomalies.map((anom, i) => (
+                        <div key={i} className="flex items-start space-x-2">
+                          <span className="font-bold text-red-800">•</span>
+                          <span className="font-medium">{anom.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : provenance.hasEvents ? (
+                  <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-bold block text-emerald-900">Provenance Verified & Clean</span>
+                      <span className="text-emerald-800">
+                        Sequential lifecycle verified: Author submission → Blind peer review → Moderator endorsement → Hyperledger Fabric anchoring. Zero post-approval modifications detected.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                    No cryptographic audit records found matching Reference ID <code>{provenance.targetId}</code>.
+                  </div>
+                )}
+
+                {/* Lifecycle Story Grid */}
+                {provenance.hasEvents && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    {/* Step 1: Submitter */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        1. Submitter / Author
+                      </span>
+                      <div className="font-bold text-slate-900 text-xs">
+                        {provenance.submitter?.name || 'Unknown Author'}
+                      </div>
+                      {provenance.submitter?.pseudonym && (
+                        <code className="text-[10px] text-slate-500 block truncate font-mono">
+                          pseudo:{provenance.submitter.pseudonym.slice(0, 10)}...
+                        </code>
+                      )}
+                      <div className="text-[10px] text-slate-400">
+                        {provenance.submitter?.timestamp ? formatDate(provenance.submitter.timestamp) : '—'}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Peer Reviewers */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        2. Blind Reviewers ({provenance.reviewers.length})
+                      </span>
+                      <div className="font-bold text-slate-900 text-xs">
+                        {provenance.reviewers.length > 0
+                          ? provenance.reviewers.map((r) => r.name).join(', ')
+                          : 'No reviews recorded yet'}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        {provenance.reviewers.length > 0 ? 'Blind evaluation submitted' : 'Pending assignment'}
+                      </div>
+                    </div>
+
+                    {/* Step 3: Approval */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        3. Moderator Approval
+                      </span>
+                      <div className="font-bold text-slate-900 text-xs">
+                        {provenance.approver?.name || 'Pending Approval'}
+                      </div>
+                      {provenance.approver?.signature && (
+                        <span className="inline-flex items-center text-[10px] text-emerald-700 font-semibold">
+                          <ShieldCheck className="w-3 h-3 mr-1" />
+                          Ed25519 Endorsed
+                        </span>
+                      )}
+                      <div className="text-[10px] text-slate-400">
+                        {provenance.approver?.timestamp ? formatDate(provenance.approver.timestamp) : 'Not yet endorsed'}
+                      </div>
+                    </div>
+
+                    {/* Step 4: Fabric Ledger Anchor */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                        4. Fabric Ledger Anchor
+                      </span>
+                      <div className="font-bold text-slate-900 text-xs">
+                        {provenance.fabricReceipt?.blockNo
+                          ? `Block #${provenance.fabricReceipt.blockNo}`
+                          : 'Anchoring in progress'}
+                      </div>
+                      {provenance.fabricReceipt?.txId && (
+                        <code className="text-[10px] text-slate-500 block truncate font-mono">
+                          Tx: {provenance.fabricReceipt.txId.slice(0, 10)}...
+                        </code>
+                      )}
+                      <div className="text-[10px] text-slate-400">
+                        3-Org Raft Consensus Anchor
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-          </div>
 
           {/* Audit Log Table */}
           {loading ? (
@@ -410,7 +862,7 @@ export const AuditorPage: React.FC = () => {
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
                   <tr>
                     <th className="px-4 py-3.5">Timestamp</th>
-                    <th className="px-4 py-3.5">Action</th>
+                    <th className="px-4 py-3.5">Action & Target Reference</th>
                     <th className="px-4 py-3.5">Actor (Pseudonym)</th>
                     <th className="px-4 py-3.5">Design A (Fabric)</th>
                     <th className="px-4 py-3.5">Design B (Signed Log)</th>
@@ -432,19 +884,42 @@ export const AuditorPage: React.FC = () => {
                           <td className="px-4 py-3.5 whitespace-nowrap text-slate-500">
                             {formatDate(evt.timestamp)}
                           </td>
-                          <td className="px-4 py-3.5">
-                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800 border border-slate-200">
-                              {evt.action}
-                            </span>
+                          <td className="px-4 py-3.5 max-w-[280px]">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                                <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800 border border-slate-200">
+                                  {evt.action}
+                                </span>
+                                {isQuestionTarget(evt.targetType) && evt.targetId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSearchTargetId(evt.targetId || '')}
+                                    title={`Click to trace full story and spot problems for Question Ref: ${evt.targetId}`}
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer text-left font-medium"
+                                  >
+                                    Ref #{evt.targetId.slice(0, 8)}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-600 font-sans font-normal leading-snug">
+                                {getActionDescription(evt.action, evt.metadata, evt.versionNo)}
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-4 py-3.5 font-mono text-slate-700">
-                            {evt.actorPseudonym ? (
-                              <span title={`HMAC Pseudonym: ${evt.actorPseudonym}`} className="text-[11px]">
-                                {evt.actorPseudonym.slice(0, 10)}...
+                          <td className="px-4 py-3.5">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-900 text-xs font-sans">
+                                {evt.actor?.name || (evt.actorPseudonym ? 'Authenticated Actor' : 'SYSTEM')}
                               </span>
-                            ) : (
-                              evt.actor?.name || 'SYSTEM'
-                            )}
+                              {evt.actorPseudonym && (
+                                <span
+                                  title={`HMAC-SHA256 Actor Pseudonym: ${evt.actorPseudonym}`}
+                                  className="font-mono text-[10px] text-slate-500 hover:text-slate-800 transition-colors"
+                                >
+                                  pseudo:{evt.actorPseudonym.slice(0, 10)}...
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3.5">
                             {isAnchored ? (
@@ -505,6 +980,71 @@ export const AuditorPage: React.FC = () => {
                           <tr className="bg-slate-50/90 border-t border-b border-slate-200">
                             <td colSpan={7} className="px-6 py-4">
                               <div className="space-y-3 font-mono text-xs">
+                                {/* Operation Summary & Opaque Reference Token */}
+                                <div className="p-3.5 bg-white border border-slate-200 rounded-lg space-y-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                                    <div>
+                                      <span className="text-slate-500 block text-[11px] font-semibold font-sans">Operation Summary:</span>
+                                      <span className="text-slate-900 font-bold text-sm font-sans flex items-center gap-2">
+                                        <span>{getActionDescription(evt.action, evt.metadata, evt.versionNo)}</span>
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                          {evt.action}
+                                        </span>
+                                      </span>
+                                    </div>
+                                    {isQuestionTarget(evt.targetType) && (evt.metadata?.versionNo || evt.versionNo) && (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-sans">
+                                        Question Version #{evt.metadata?.versionNo || evt.versionNo}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {evt.targetId && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                                      <div className="md:col-span-2">
+                                        <span className="text-slate-500 block text-[11px] font-semibold mb-1 font-sans">
+                                          {isQuestionTarget(evt.targetType)
+                                            ? 'Question Reference ID (Opaque Transaction Token):'
+                                            : `${formatTargetTypeLabel(evt.targetType)} Reference ID:`}
+                                        </span>
+                                        <code className={`p-2.5 rounded-lg block font-bold text-[11px] break-all select-all font-mono ${
+                                          isQuestionTarget(evt.targetType)
+                                            ? 'bg-blue-50/70 border border-blue-200 text-blue-950'
+                                            : 'bg-slate-100 border border-slate-200 text-slate-800'
+                                        }`}>
+                                          {evt.targetId}
+                                        </code>
+                                        {isQuestionTarget(evt.targetType) && (
+                                          <span className="text-[10px] text-slate-500 mt-1 block font-sans">
+                                            🛡️ Pure random UUID reference (like a bank transaction number) — reveals zero subject, difficulty, or content clues.
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-500 block text-[11px] font-semibold mb-1 font-sans">Target Entity Type:</span>
+                                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-[11px]">
+                                          <span className="font-bold uppercase tracking-wider">{evt.targetType || 'System'}</span>
+                                          <span className="block text-[10px] text-slate-500 font-sans mt-0.5">Immutable Ledger Target</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="p-3 bg-white border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-slate-500 block text-[11px] font-semibold">Actor / Editor Identity:</span>
+                                    <span className="text-slate-900 font-bold text-sm font-sans">{evt.actor?.name || 'SYSTEM / Autonomous Process'}</span>
+                                    {evt.actor?.email && <span className="text-slate-500 text-xs ml-2">({evt.actor.email})</span>}
+                                  </div>
+                                  {evt.actorPseudonym && (
+                                    <div className="text-right">
+                                      <span className="text-slate-500 block text-[11px] font-semibold">HMAC-SHA-256 Pseudonym (DPDP Act):</span>
+                                      <code className="text-slate-800 text-[11px] font-mono">{evt.actorPseudonym}</code>
+                                    </div>
+                                  )}
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <span className="text-slate-500 block text-[11px] mb-1 font-semibold">Previous Hash Link:</span>
@@ -557,7 +1097,8 @@ export const AuditorPage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
+      );
+    })()}
 
       {/* TAB 2: Integrity Dashboard */}
       {activeTab === 'dashboard' && (

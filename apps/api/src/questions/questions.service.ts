@@ -173,6 +173,13 @@ export class QuestionsService {
       },
     });
 
+    // Check workflow lock
+    if (question.isLocked) {
+      throw new ForbiddenException(
+        `Question workflow is currently locked/suspended: ${question.lockReason || 'Administrative freeze'}`,
+      );
+    }
+
     // Only author can edit
     if (question.authorId !== userId) {
       await this.audit.log({
@@ -190,8 +197,9 @@ export class QuestionsService {
       throw new NotFoundException('No version found');
     }
 
-    // If current version is SUBMITTED, create a new version
-    const isSubmitted = ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'].includes(currentVersion.status);
+    // Non-draft question versions are strictly immutable (enforced by DB trigger).
+    // Any status other than DRAFT must spawn a new version.
+    const isSubmitted = currentVersion.status !== 'DRAFT';
     const newVersionNo = isSubmitted ? currentVersion.versionNo + 1 : currentVersion.versionNo;
 
     const { content, answerKey, metadata } = input;
@@ -222,6 +230,7 @@ export class QuestionsService {
           versionNo: newVersionNo,
           status: 'DRAFT',
           authorId: userId,
+          parentVersionId: currentVersion.id,
           encryptedContent: contentEnvelope.ciphertext,
           contentNonce: contentEnvelope.nonce,
           contentTag: contentEnvelope.tag,
@@ -322,6 +331,12 @@ export class QuestionsService {
       },
     });
 
+    if (question.isLocked) {
+      throw new ForbiddenException(
+        `Question workflow is currently locked/suspended: ${question.lockReason || 'Administrative freeze'}`,
+      );
+    }
+
     if (question.authorId !== userId) {
       throw new ForbiddenException('You can only submit your own questions');
     }
@@ -360,6 +375,12 @@ export class QuestionsService {
         versions: { orderBy: { versionNo: 'desc' }, take: 1 },
       },
     });
+
+    if (question.isLocked) {
+      throw new ForbiddenException(
+        `Question workflow is currently locked/suspended: ${question.lockReason || 'Administrative freeze'}`,
+      );
+    }
 
     if (question.authorId !== userId) {
       throw new ForbiddenException('You can only withdraw your own questions');
@@ -825,6 +846,9 @@ export class QuestionsService {
         marks: q.marks,
         negativeMarks: q.negativeMarks,
         language: q.language,
+        isLocked: q.isLocked,
+        lockReason: q.lockReason,
+        lockedAt: q.lockedAt ? q.lockedAt.toISOString() : null,
         currentVersion: q.versions[0]?.versionNo || 1,
         status: q.versions[0]?.status || 'DRAFT',
         createdAt: q.createdAt.toISOString(),
@@ -867,6 +891,11 @@ export class QuestionsService {
         id: true,
         versionNo: true,
         status: true,
+        authorId: true,
+        author: {
+          select: { id: true, name: true, email: true },
+        },
+        changeJustification: true,
         contentCommitment: true,
         createdAt: true,
       },
@@ -897,6 +926,53 @@ export class QuestionsService {
       solution: content.solution
         ? sanitizeHtml(content.solution, { allowedTags: [], allowedAttributes: {} })
         : undefined,
+    };
+  }
+
+  /**
+   * Lock or unlock question workflow (Admin only)
+   */
+  async toggleLock(
+    questionId: string,
+    isLocked: boolean,
+    reason: string | undefined,
+    adminId: string,
+  ) {
+    const question = await this.prisma.question.findUniqueOrThrow({
+      where: { id: questionId },
+      include: {
+        versions: { orderBy: { versionNo: 'desc' }, take: 1 },
+      },
+    });
+
+    const updated = await this.prisma.question.update({
+      where: { id: questionId },
+      data: {
+        isLocked,
+        lockReason: isLocked ? (reason || 'Administrative governance suspension') : null,
+        lockedAt: isLocked ? new Date() : null,
+        lockedById: isLocked ? adminId : null,
+      },
+    });
+
+    await this.audit.log({
+      actorId: adminId,
+      action: isLocked ? 'QUESTION_WORKFLOW_LOCKED' : 'QUESTION_WORKFLOW_UNLOCKED',
+      targetType: 'question',
+      targetId: questionId,
+      metadata: {
+        humanId: question.humanId,
+        reason: reason || (isLocked ? 'Administrative lock' : 'Administrative unlock'),
+        versionNo: question.versions[0]?.versionNo || 1,
+      },
+    });
+
+    return {
+      id: updated.id,
+      humanId: updated.humanId,
+      isLocked: updated.isLocked,
+      lockReason: updated.lockReason,
+      lockedAt: updated.lockedAt,
     };
   }
 }

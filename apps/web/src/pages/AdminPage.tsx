@@ -11,6 +11,15 @@ import {
   UserPlus,
   Loader2,
   RefreshCw,
+  Search,
+  Lock,
+  Unlock,
+  Layers,
+  EyeOff,
+  ShieldCheck,
+  ShieldAlert,
+  X,
+  HelpCircle,
 } from 'lucide-react';
 
 interface UserItem {
@@ -42,9 +51,9 @@ interface ExamItem {
 }
 
 interface AdminPageProps {
-  initialSubTab?: 'users' | 'syllabus';
-  activeSubTab?: 'users' | 'syllabus';
-  onSubTabChange?: (tab: 'users' | 'syllabus') => void;
+  initialSubTab?: 'users' | 'syllabus' | 'workflow';
+  activeSubTab?: 'users' | 'syllabus' | 'workflow';
+  onSubTabChange?: (tab: 'users' | 'syllabus' | 'workflow') => void;
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({
@@ -52,10 +61,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   activeSubTab,
   onSubTabChange,
 }) => {
-  const [internalTab, setInternalTab] = useState<'users' | 'syllabus'>(activeSubTab || initialSubTab);
+  const [internalTab, setInternalTab] = useState<'users' | 'syllabus' | 'workflow'>(activeSubTab || initialSubTab);
   const activeTab = activeSubTab || internalTab;
 
-  const handleSelectTab = (tab: 'users' | 'syllabus') => {
+  const handleSelectTab = (tab: 'users' | 'syllabus' | 'workflow') => {
     setInternalTab(tab);
     onSubTabChange?.(tab);
   };
@@ -87,6 +96,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [showAddSubtopic, setShowAddSubtopic] = useState<string | null>(null); // topicId
   const [newSubtopicName, setNewSubtopicName] = useState('');
 
+  // Question workflow & auditor support state
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [questionSearch, setQuestionSearch] = useState('');
+  const [auditorLookupInput, setAuditorLookupInput] = useState('');
+  const [auditorLookupResult, setAuditorLookupResult] = useState<any | null>(null);
+
   // Fetch users
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -113,13 +129,106 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     }
   };
 
+  // Fetch questions for workflow & auditor support
+  const fetchQuestions = async () => {
+    setQuestionsLoading(true);
+    try {
+      const res = await apiRequest<{ success: boolean; data: { items: any[] } }>('/questions?limit=100');
+      setQuestions(res.data?.items || []);
+    } catch (err) {
+      console.error('Failed to load questions for admin:', err);
+    } finally {
+      setQuestionsLoading(false);
+    }
+  };
+
+  const [workflowStatusFilter, setWorkflowStatusFilter] = useState<string>('ALL');
+  const [assignModalQuestion, setAssignModalQuestion] = useState<any | null>(null);
+  const [selectedReviewerId, setSelectedReviewerId] = useState<string>('');
+
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers();
-    } else {
+    } else if (activeTab === 'syllabus') {
       fetchSyllabus();
+    } else if (activeTab === 'workflow') {
+      fetchQuestions();
+      if (users.length === 0) fetchUsers();
     }
   }, [activeTab]);
+
+  const handleAuditorLookup = () => {
+    const clean = auditorLookupInput.trim().replace(/^#/, '').toLowerCase();
+    if (!clean) {
+      setAuditorLookupResult(null);
+      return;
+    }
+    const match = questions.find(
+      (q) => q.id.toLowerCase().includes(clean) || (q.humanId && q.humanId.toLowerCase().includes(clean)),
+    );
+    setAuditorLookupResult(match || 'NOT_FOUND');
+  };
+
+  const handleToggleLock = async (questionId: string, currentLocked: boolean) => {
+    try {
+      const targetLocked = !currentLocked;
+      await apiRequest<{ success: boolean; data: any }>(`/questions/${questionId}/workflow-lock`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          isLocked: targetLocked,
+          reason: targetLocked ? 'Administrative governance suspension' : 'Administrative workflow release',
+        }),
+      });
+
+      setUserMsg({
+        type: 'success',
+        text: `Question Ref #${questionId.slice(0, 8)} workflow is now ${targetLocked ? 'LOCKED / SUSPENDED' : 'UNLOCKED / ACTIVE'}.`,
+      });
+
+      // Update in local questions list
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === questionId ? { ...q, isLocked: targetLocked } : q))
+      );
+
+      // Update in auditor support result if open
+      setAuditorLookupResult((prev: any) =>
+        prev && prev.id === questionId ? { ...prev, isLocked: targetLocked } : prev
+      );
+    } catch (err: any) {
+      setUserMsg({
+        type: 'error',
+        text: err.message || 'Failed to update workflow lock status.',
+      });
+    }
+  };
+
+  const handleAssignReviewer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignModalQuestion || !selectedReviewerId) return;
+    try {
+      const reviewer = users.find((u) => u.id === selectedReviewerId);
+      await apiRequest<{ success: boolean; data: any }>('/review/assignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          questionId: assignModalQuestion.id,
+          reviewerId: selectedReviewerId,
+        }),
+      });
+
+      setUserMsg({
+        type: 'success',
+        text: `Reviewer ${reviewer?.name || 'Assigned User'} successfully assigned to Question Ref #${assignModalQuestion.id.slice(0, 8)} (${assignModalQuestion.humanId || 'Q'}). Now visible in Reviewer Portal!`,
+      });
+      setAssignModalQuestion(null);
+      setSelectedReviewerId('');
+      fetchQuestions();
+    } catch (err: any) {
+      setUserMsg({
+        type: 'error',
+        text: err.message || 'Failed to assign reviewer to question.',
+      });
+    }
+  };
 
   useEffect(() => {
     if (activeSubTab) {
@@ -254,6 +363,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             <span>Syllabus Taxonomy</span>
+          </button>
+          <button
+            onClick={() => handleSelectTab('workflow')}
+            className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'workflow' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Question Bank & Workflow</span>
           </button>
         </div>
       </div>
@@ -695,6 +813,567 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               </div>
             ))}
           </div>
+          )}
+        </div>
+      )}
+
+      {/* Question Bank & Workflow Governance Tab */}
+      {activeTab === 'workflow' && (
+        <div className="space-y-6">
+          {/* Security Boundaries & Role Policy Card */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+            <div className="flex items-center space-x-3 mb-5 pb-4 border-b border-slate-100">
+              <div className="p-2.5 rounded-xl bg-red-50 text-red-700 border border-red-200 shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                    Administrative Governance & Cryptographic Separation of Duties
+                  </h2>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-bold">
+                    Protocol Invariant
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Administrative role controls workflow lifecycle and syllabus metadata while strictly constrained by zero-knowledge protocol invariants.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 hover:border-slate-300 transition-colors">
+                <div className="flex items-center space-x-2 text-red-700 font-bold mb-1.5">
+                  <EyeOff className="w-4 h-4 text-red-600" />
+                  <span>Zero Content Exposure</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  The admin <strong className="text-slate-900 font-semibold">cannot read</strong> question text, options, or answer keys. All stems and solutions are envelope-encrypted with AES-256-GCM. Attempting decryption returns HTTP 403.
+                </p>
+              </div>
+
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 hover:border-slate-300 transition-colors">
+                <div className="flex items-center space-x-2 text-slate-900 font-bold mb-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Immutable Append-Only Ledger</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  The admin <strong className="text-slate-900 font-semibold">cannot edit or delete</strong> audit ledger rows. PostgreSQL triggers and Hyperledger Fabric block anchoring enforce append-only immutability.
+                </p>
+              </div>
+
+              <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80 hover:border-slate-300 transition-colors">
+                <div className="flex items-center space-x-2 text-slate-900 font-bold mb-1.5">
+                  <Lock className="w-4 h-4 text-slate-700" />
+                  <span>Multi-Party Consensus</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  The admin <strong className="text-slate-900 font-semibold">cannot approve changes alone</strong>. Questions require double-blind independent review and cryptographic moderator signature verification.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Issue Tracer & Auditor Support Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <Search className="w-4 h-4 text-slate-700" />
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Auditor Support & Lifecycle Issue Tracer
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Answer the auditor's query <span className="font-semibold text-slate-700">"What is this ID?"</span> or trace users involved when an alert fires — without decrypting or exposing question content.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchQuestions}
+                disabled={questionsLoading}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all self-start sm:self-auto"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${questionsLoading ? 'animate-spin text-red-600' : ''}`} />
+                <span>Refresh Bank</span>
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Enter Question Reference ID (#367a7254 or UUID) or Human ID (Q-102)..."
+                  value={auditorLookupInput}
+                  onChange={(e) => setAuditorLookupInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAuditorLookup()}
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 font-mono"
+                />
+              </div>
+              <button
+                onClick={handleAuditorLookup}
+                className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center justify-center space-x-1.5"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Trace & Support Auditor</span>
+              </button>
+            </div>
+
+            {/* Quick selector pill buttons */}
+            {questions.length > 0 && !auditorLookupResult && (
+              <div className="flex items-center flex-wrap gap-1.5 text-xs text-slate-500">
+                <span className="text-[11px] font-medium text-slate-400">Quick trace examples:</span>
+                {questions.slice(0, 4).map((q) => (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setAuditorLookupInput(`#${q.id.slice(0, 8)}`);
+                      const clean = q.id.slice(0, 8).toLowerCase();
+                      const match = questions.find((item) => item.id.toLowerCase().includes(clean));
+                      setAuditorLookupResult(match || 'NOT_FOUND');
+                    }}
+                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
+                  >
+                    #{q.id.slice(0, 8)} ({q.humanId || 'Q'})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Auditor Support Dossier Response */}
+            {auditorLookupResult && auditorLookupResult !== 'NOT_FOUND' && (
+              <div className="mt-4 p-4 rounded-xl bg-slate-50/80 border border-slate-200 animate-in fade-in duration-200">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-900 text-white font-mono">
+                      Ref #{auditorLookupResult.id.slice(0, 8)}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      Human ID: {auditorLookupResult.humanId || 'Unassigned'}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                        auditorLookupResult.status === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : auditorLookupResult.status === 'IN_REVIEW'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : auditorLookupResult.status === 'SUBMITTED'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                          : 'bg-slate-100 text-slate-800 border border-slate-300'
+                      }`}
+                    >
+                      {auditorLookupResult.status}
+                    </span>
+                    {auditorLookupResult.isLocked && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300">
+                        Workflow Locked
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setAuditorLookupResult(null)}
+                    className="text-slate-400 hover:text-slate-600 text-xs"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-3">
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Author / Submitter</span>
+                    <span className="font-semibold text-slate-800">{auditorLookupResult.authorName || 'Examiner'}</span>
+                    <span className="block text-[10px] font-mono text-slate-400 truncate">
+                      ID: {auditorLookupResult.authorId?.slice(0, 12)}...
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Subject & Syllabus</span>
+                    <span className="font-semibold text-slate-800">
+                      {auditorLookupResult.subjectCode || 'EXAM'} - {auditorLookupResult.subjectName || 'General'}
+                    </span>
+                    <span className="block text-[10px] text-slate-500 truncate">
+                      Topic: {auditorLookupResult.topicName || 'Core Topic'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Version & Timestamp</span>
+                    <span className="font-semibold text-slate-800">Version {auditorLookupResult.currentVersion}</span>
+                    <span className="block text-[10px] text-slate-500">
+                      Updated: {formatDate(auditorLookupResult.updatedAt || auditorLookupResult.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Content Isolation</span>
+                    <span className="flex items-center space-x-1 text-emerald-700 font-semibold">
+                      <Lock className="w-3 h-3" />
+                      <span>AES-256 Sealed</span>
+                    </span>
+                    <span className="block text-[10px] text-slate-400">Zero Content Leakage</span>
+                  </div>
+                </div>
+
+                {/* Ready-to-use Auditor Support Memo */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
+                  <span className="text-[10px] uppercase font-bold tracking-wide text-slate-400 block mb-1">
+                    Auditor Support Verification Memo (Safe to copy & provide):
+                  </span>
+                  <p className="font-mono text-slate-700 text-[11px] leading-relaxed bg-slate-50 p-2 rounded border border-slate-200">
+                    "Question Reference ID <strong className="text-slate-900">#{auditorLookupResult.id.slice(0, 8)}</strong> (UUID: {auditorLookupResult.id}) corresponds to institutional question label <strong className="text-slate-900">{auditorLookupResult.humanId || 'N/A'}</strong>, authored by {auditorLookupResult.authorName} under subject {auditorLookupResult.subjectCode}. Current state is {auditorLookupResult.status} (v{auditorLookupResult.currentVersion}). Workflow is {auditorLookupResult.isLocked ? 'SUSPENDED/LOCKED' : 'ACTIVE'}. Ciphertext is cryptographically envelope-sealed."
+                  </p>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[11px]">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleToggleLock(auditorLookupResult.id, Boolean(auditorLookupResult.isLocked))}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center space-x-1 transition-colors ${
+                          auditorLookupResult.isLocked
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-rose-600 text-white hover:bg-rose-700'
+                        }`}
+                      >
+                        {auditorLookupResult.isLocked ? (
+                          <>
+                            <Unlock className="w-3.5 h-3.5" />
+                            <span>Unlock Workflow</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Lock / Suspend Workflow</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAssignModalQuestion(auditorLookupResult);
+                        }}
+                        className="px-2.5 py-1 rounded text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors flex items-center space-x-1"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Manage / Assign Reviewer</span>
+                      </button>
+                    </div>
+                    <span className="text-slate-400">
+                      Full UUID: <code className="font-mono text-[10px] text-slate-600">{auditorLookupResult.id}</code>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {auditorLookupResult === 'NOT_FOUND' && (
+              <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>
+                    No question found matching ID: <code className="font-mono font-bold">{auditorLookupInput}</code>. Ensure the reference snippet or full UUID is correct.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setAuditorLookupResult(null)}
+                  className="text-amber-600 hover:text-amber-800 font-semibold"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Question Bank Directory & Governance Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Question Bank Lifecycle & Governance Directory
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Manage workflow states, assign independent reviewers, and lock questions involved in complaints or audit flags.
+                </p>
+              </div>
+
+              {/* Status filter buttons */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {['ALL', 'DRAFT', 'SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setWorkflowStatusFilter(st)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      workflowStatusFilter === st
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter Search */}
+            <div className="px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+              <div className="relative w-full max-w-sm">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter by Ref ID, Human ID, or Author..."
+                  value={questionSearch}
+                  onChange={(e) => setQuestionSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
+                />
+              </div>
+              <span className="text-xs text-slate-500">
+                Total Loaded: <strong className="text-slate-800">{questions.length}</strong> questions
+              </span>
+            </div>
+
+            {/* Table */}
+            {questionsLoading ? (
+              <div className="p-12 flex flex-col items-center justify-center space-y-3">
+                <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                  <Loader2 className="w-7 h-7 animate-spin" />
+                </div>
+                <p className="text-xs text-slate-500 font-mono">Loading question repository metadata...</p>
+              </div>
+            ) : questions.length === 0 ? (
+              <div className="p-12 text-center text-slate-500 text-xs">
+                No questions found in repository.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4">Ref ID / Human ID</th>
+                      <th className="py-3 px-4">Author</th>
+                      <th className="py-3 px-4">Subject & Topic</th>
+                      <th className="py-3 px-4">Version</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Workflow Lock</th>
+                      <th className="py-3 px-4 text-right">Governance Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {questions
+                      .filter((q) => {
+                        if (workflowStatusFilter !== 'ALL' && q.status !== workflowStatusFilter) {
+                          return false;
+                        }
+                        if (!questionSearch.trim()) return true;
+                        const s = questionSearch.toLowerCase().replace(/^#/, '');
+                        return (
+                          q.id.toLowerCase().includes(s) ||
+                          (q.humanId && q.humanId.toLowerCase().includes(s)) ||
+                          (q.authorName && q.authorName.toLowerCase().includes(s)) ||
+                          (q.subjectCode && q.subjectCode.toLowerCase().includes(s))
+                        );
+                      })
+                      .map((q) => {
+                        const isLocked = Boolean(q.isLocked);
+                        return (
+                          <tr key={q.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4 font-mono">
+                              <div className="flex items-center space-x-2">
+                                <span
+                                  onClick={() => {
+                                    setAuditorLookupInput(`#${q.id.slice(0, 8)}`);
+                                    setAuditorLookupResult(q);
+                                  }}
+                                  className="cursor-pointer text-slate-800 hover:text-black bg-slate-100 hover:bg-slate-200 border border-slate-200 px-1.5 py-0.5 rounded font-bold text-[11px]"
+                                  title={`Full UUID: ${q.id} — Click to trace & support auditor`}
+                                >
+                                  #{q.id.slice(0, 8)}
+                                </span>
+                                <span className="font-semibold text-slate-800 font-sans">
+                                  {q.humanId || 'Q-N/A'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-medium text-slate-700">
+                              {q.authorName || 'Examiner'}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600">
+                              <div className="font-medium text-slate-800">
+                                {q.subjectCode || 'EXAM'} - {q.subjectName || 'General'}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {q.topicName || 'Topic General'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-600">
+                              v{q.currentVersion}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                  q.status === 'APPROVED'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : q.status === 'IN_REVIEW'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : q.status === 'SUBMITTED'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                    : 'bg-slate-100 text-slate-800 border border-slate-300'
+                                }`}
+                              >
+                                {q.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              {isLocked ? (
+                                <span className="inline-flex items-center space-x-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>SUSPENDED</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center space-x-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <Unlock className="w-2.5 h-2.5" />
+                                  <span>ACTIVE</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end space-x-1.5">
+                                <button
+                                  onClick={() => {
+                                    setAuditorLookupInput(`#${q.id.slice(0, 8)}`);
+                                    setAuditorLookupResult(q);
+                                  }}
+                                  className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
+                                  title="Trace users and formulate answer for auditor"
+                                >
+                                  Trace / Support
+                                </button>
+                                <button
+                                  onClick={() => setAssignModalQuestion(q)}
+                                  className="px-2 py-1 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
+                                  title="Assign reviewer to question"
+                                >
+                                  Assign Reviewer
+                                </button>
+                                <button
+                                  onClick={() => handleToggleLock(q.id, Boolean(q.isLocked))}
+                                  className={`p-1 rounded text-xs transition-colors ${
+                                    isLocked
+                                      ? 'text-emerald-700 hover:bg-emerald-50'
+                                      : 'text-rose-600 hover:bg-rose-50'
+                                  }`}
+                                  title={isLocked ? 'Unlock workflow' : 'Lock / Suspend workflow'}
+                                >
+                                  {isLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Assign Reviewer Modal */}
+          {assignModalQuestion && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+              <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 shadow-xl space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Assign Reviewer to Question
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Manage workflow assignment for Ref #{assignModalQuestion.id.slice(0, 8)} ({assignModalQuestion.humanId || 'Q'})
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAssignModalQuestion(null);
+                      setSelectedReviewerId('');
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Subject:</span>
+                    <span className="font-semibold text-slate-800">{assignModalQuestion.subjectCode}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Author:</span>
+                    <span className="font-semibold text-slate-800">{assignModalQuestion.authorName || 'Examiner'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Status:</span>
+                    <span className="font-semibold text-slate-800">{assignModalQuestion.status}</span>
+                  </div>
+                  {assignModalQuestion.isLocked && (
+                    <div className="flex justify-between text-rose-600 font-bold">
+                      <span>Workflow:</span>
+                      <span>SUSPENDED / LOCKED</span>
+                    </div>
+                  )}
+                </div>
+
+                {assignModalQuestion.isLocked ? (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 leading-relaxed font-semibold">
+                    ⚠️ Cannot assign reviewers: This question is currently LOCKED / SUSPENDED. Unlock the workflow first before assigning reviewers.
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
+                    <strong>Blind-Solve Protocol:</strong> Once assigned, this question appears immediately in the reviewer's portal. The reviewer cannot see the answer key until completing Phase 1.
+                  </div>
+                )}
+
+                <form onSubmit={handleAssignReviewer} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Select Qualified Reviewer
+                    </label>
+                    <select
+                      value={selectedReviewerId}
+                      onChange={(e) => setSelectedReviewerId(e.target.value)}
+                      required
+                      disabled={Boolean(assignModalQuestion.isLocked)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white disabled:bg-slate-100 disabled:opacity-60"
+                    >
+                      <option value="">-- Choose Reviewer from Directory --</option>
+                      {users
+                        .filter((u) => u.role === 'REVIEWER' || u.role === 'MODERATOR')
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.email}) — [{u.role}]
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssignModalQuestion(null);
+                        setSelectedReviewerId('');
+                      }}
+                      className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!selectedReviewerId || Boolean(assignModalQuestion.isLocked)}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition-all"
+                    >
+                      Confirm Assignment
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       )}

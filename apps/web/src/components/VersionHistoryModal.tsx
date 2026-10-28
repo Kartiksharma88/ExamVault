@@ -3,13 +3,16 @@ import { apiRequest } from '../lib/api-client';
 import { formatDate } from '../lib/utils';
 import { DiffViewer } from './DiffViewer';
 import { KaTeXPreview } from './KaTeXPreview';
-import { X, History, ShieldCheck, Eye, GitCompare } from 'lucide-react';
+import { X, History, ShieldCheck, Eye, GitCompare, User } from 'lucide-react';
 
 interface VersionItem {
   id: string;
   questionId: string;
   versionNo: number;
   status: string;
+  authorId?: string;
+  author?: { id: string; name: string; email: string };
+  changeJustification?: string;
   contentCommitment: string;
   createdAt: string;
 }
@@ -91,7 +94,16 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center space-x-2.5">
             <History className="w-5 h-5 text-red-600" />
-            <h2 className="text-base font-bold text-slate-900">Immutable Version History & Commitments</h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Immutable Version History & Commitments</h2>
+              <div className="flex items-center space-x-2 text-xs text-slate-500 font-mono mt-0.5">
+                <span>Question Ref ID:</span>
+                <span className="px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 rounded font-bold text-[11px] select-all">
+                  {questionId}
+                </span>
+                <span className="text-[10px] text-slate-400 font-sans">(Opaque reference token — zero content/subject hints)</span>
+              </div>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -144,6 +156,19 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                             {ver.status}
                           </span>
                         </div>
+
+                        {ver.author && (
+                          <div className="text-[11px] font-medium text-slate-700 flex items-center space-x-1.5 my-1 bg-slate-100/70 px-2 py-0.5 rounded-md">
+                            <User className="w-3 h-3 text-slate-500" />
+                            <span>Edited by: <strong className="text-slate-900">{ver.author.name}</strong></span>
+                          </div>
+                        )}
+
+                        {ver.changeJustification && (
+                          <div className="text-[10px] text-slate-600 bg-white p-1.5 rounded border border-slate-200 my-1 italic line-clamp-2">
+                            "{ver.changeJustification}"
+                          </div>
+                        )}
 
                         <div className="space-y-1 text-xs">
                           <div className="flex items-center space-x-1 text-slate-500">

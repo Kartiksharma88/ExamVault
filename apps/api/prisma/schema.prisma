@@ -247,6 +247,10 @@ model Question {
   estimatedTime  Int                @default(120) @map("estimated_time") // seconds
   language       LanguageEnum       @default(EN)
   currentVersion Int                @default(1) @map("current_version")
+  isLocked       Boolean            @default(false) @map("is_locked")
+  lockReason     String?            @map("lock_reason") @db.Text
+  lockedAt       DateTime?          @map("locked_at")
+  lockedById     String?            @map("locked_by_id") @db.Uuid
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, LogOut, FileText, PlusCircle, UploadCloud, BarChart3, Users, BookOpen, KeyRound } from 'lucide-react';
+import { Shield, LogOut, FileText, PlusCircle, UploadCloud, BarChart3, Users, BookOpen, KeyRound, Layers } from 'lucide-react';
 
 interface HeaderProps {
   currentTab: string;
@@ -81,6 +81,13 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab }) => {
                 <span>User Directory</span>
               </button>
               <button
+                onClick={() => onSelectTab('admin-workflow')}
+                className={getNavButtonClass('admin-workflow')}
+              >
+                <Layers className="w-4 h-4" />
+                <span>Workflow & Support</span>
+              </button>
+              <button
                 onClick={() => onSelectTab('admin-syllabus')}
                 className={getNavButtonClass('admin-syllabus')}
               >
@@ -104,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab }) => {
             </>
           )}
 
-          {role === 'REVIEWER' && (
+          {(role === 'REVIEWER' || role === 'MODERATOR') && (
             <button
               onClick={() => onSelectTab('review-queue')}
               className={getNavButtonClass('review-queue')}

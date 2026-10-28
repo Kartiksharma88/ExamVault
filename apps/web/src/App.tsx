@@ -45,13 +45,13 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
   if (tab === 'stats') return true;
   switch (role) {
     case 'ADMIN':
-      return ['admin-users', 'admin-syllabus', 'admin-policies', 'audit', 'stats'].includes(tab);
+      return ['admin-users', 'admin-syllabus', 'admin-workflow', 'admin-policies', 'audit', 'stats'].includes(tab);
     case 'AUDITOR':
       return ['audit', 'stats'].includes(tab);
     case 'REVIEWER':
       return ['review-queue', 'stats'].includes(tab);
     case 'MODERATOR':
-      return ['moderator-console', 'stats'].includes(tab);
+      return ['moderator-console', 'review-queue', 'stats'].includes(tab);
     case 'EXAMINER':
       return ['dashboard', 'editor', 'import', 'stats'].includes(tab);
     default:
@@ -141,14 +141,28 @@ const MainLayout: React.FC = () => {
         {resolvedTab === 'review-queue' && <ReviewerWorkspace />}
 
         {/* Moderator Console */}
-        {resolvedTab === 'moderator-console' && <ModeratorConsole />}
+        {resolvedTab === 'moderator-console' && (
+          <ModeratorConsole onNavigateToReviewQueue={() => setCurrentTab('review-queue')} />
+        )}
 
         {/* Admin Tabs */}
-        {(resolvedTab === 'admin-users' || resolvedTab === 'admin-syllabus') && (
+        {(resolvedTab === 'admin-users' || resolvedTab === 'admin-syllabus' || resolvedTab === 'admin-workflow') && (
           <AdminPage
-            activeSubTab={resolvedTab === 'admin-syllabus' ? 'syllabus' : 'users'}
+            activeSubTab={
+              resolvedTab === 'admin-syllabus'
+                ? 'syllabus'
+                : resolvedTab === 'admin-workflow'
+                ? 'workflow'
+                : 'users'
+            }
             onSubTabChange={(subTab) => {
-              setCurrentTab(subTab === 'syllabus' ? 'admin-syllabus' : 'admin-users');
+              setCurrentTab(
+                subTab === 'syllabus'
+                  ? 'admin-syllabus'
+                  : subTab === 'workflow'
+                  ? 'admin-workflow'
+                  : 'admin-users',
+              );
             }}
           />
         )}
