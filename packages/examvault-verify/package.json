@@ -1,0 +1,26 @@
+{
+  "name": "@examvault/verify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent, zero-business-logic auditor verifier CLI for ExamVault",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "examvault-verify": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@examvault/audit-canonical": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.14.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.5.0"
+  }
+}

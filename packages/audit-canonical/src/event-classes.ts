@@ -79,3 +79,7 @@ export class EventClassifier {
     return Array.from(this.bulkSet);
   }
 }
+
+export function isCriticalEvent(eventType: string): boolean {
+  return new EventClassifier().classify(eventType) === 'CRITICAL';
+}
