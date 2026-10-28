@@ -10,6 +10,7 @@ import { FabricGatewayService } from './fabric/fabric-gateway.service';
 import { AuditOutboxWorker } from './outbox/audit-outbox.worker';
 import { AuditReconciliationService } from './reconciliation/audit-reconciliation.service';
 import { AuditCheckpointService } from './checkpoints/audit-checkpoint.service';
+import { StorageIntegrityService } from './storage/storage-integrity.service';
 
 @Global()
 @Module({
@@ -25,6 +26,7 @@ import { AuditCheckpointService } from './checkpoints/audit-checkpoint.service';
     AuditOutboxWorker,
     AuditReconciliationService,
     AuditCheckpointService,
+    StorageIntegrityService,
   ],
   exports: [
     AuditService,
@@ -36,6 +38,7 @@ import { AuditCheckpointService } from './checkpoints/audit-checkpoint.service';
     AuditOutboxWorker,
     AuditReconciliationService,
     AuditCheckpointService,
+    StorageIntegrityService,
   ],
 })
 export class AuditModule {}

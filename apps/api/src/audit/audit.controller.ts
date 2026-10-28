@@ -14,6 +14,7 @@ import { AuditDispatcherService } from './audit-dispatcher.service';
 import { AuditOutboxWorker } from './outbox/audit-outbox.worker';
 import { AuditReconciliationService } from './reconciliation/audit-reconciliation.service';
 import { AuditCheckpointService } from './checkpoints/audit-checkpoint.service';
+import { StorageIntegrityService } from './storage/storage-integrity.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Audit')
@@ -25,6 +26,7 @@ export class AuditController {
     private outboxWorker: AuditOutboxWorker,
     private reconciliationService: AuditReconciliationService,
     private checkpointService: AuditCheckpointService,
+    private storageIntegrityService: StorageIntegrityService,
     private prisma: PrismaService,
   ) {}
 
@@ -204,6 +206,36 @@ export class AuditController {
         },
       },
     };
+  }
+
+  @Post('storage/scan')
+  @Roles('ADMIN', 'AUDITOR')
+  @SkipCsrf()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger on-demand ciphertext storage integrity scan (Postgres & MinIO)' })
+  async triggerStorageScan() {
+    const report = await this.storageIntegrityService.runIntegrityScan();
+    return { success: true, data: report };
+  }
+
+  @Get('storage/scans')
+  @Roles('ADMIN', 'AUDITOR')
+  @SkipCsrf()
+  @ApiOperation({ summary: 'List recent storage integrity scan reports' })
+  async listStorageScans(@Query('limit') limit?: string) {
+    const take = limit ? parseInt(limit, 10) : 10;
+    const scans = await this.storageIntegrityService.getRecentScans(take);
+    return { success: true, data: scans };
+  }
+
+  @Post('storage/backfill')
+  @Roles('ADMIN', 'AUDITOR')
+  @SkipCsrf()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Backfill ciphertext hashes for legacy QuestionVersion rows' })
+  async backfillStorageHashes() {
+    const result = await this.storageIntegrityService.backfillCiphertextHashes();
+    return { success: true, data: result };
   }
 
   @Get('approvals/verify/:questionId/:versionNo')

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import sanitizeHtml from 'sanitize-html';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
@@ -136,6 +137,8 @@ export class QuestionsService {
         encryptedAnswerKey: answerEnvelope.wrappedKey,
         contentCommitment: commitment.commitment,
         keyId: contentEnvelope.keyId,
+        ciphertextSha256: crypto.createHash('sha256').update(contentEnvelope.ciphertext).digest('hex'),
+        answerCiphertextSha256: crypto.createHash('sha256').update(answerEnvelope.ciphertext).digest('hex'),
       },
     });
 
@@ -229,6 +232,8 @@ export class QuestionsService {
           encryptedAnswerKey: answerEnvelope.wrappedKey,
           contentCommitment: commitment.commitment,
           keyId: contentEnvelope.keyId,
+          ciphertextSha256: crypto.createHash('sha256').update(contentEnvelope.ciphertext).digest('hex'),
+          answerCiphertextSha256: crypto.createHash('sha256').update(answerEnvelope.ciphertext).digest('hex'),
         },
       });
 
@@ -266,6 +271,8 @@ export class QuestionsService {
           encryptedAnswerKey: answerEnvelope.wrappedKey,
           contentCommitment: commitment.commitment,
           keyId: contentEnvelope.keyId,
+          ciphertextSha256: crypto.createHash('sha256').update(contentEnvelope.ciphertext).digest('hex'),
+          answerCiphertextSha256: crypto.createHash('sha256').update(answerEnvelope.ciphertext).digest('hex'),
         },
       });
 
@@ -712,6 +719,8 @@ export class QuestionsService {
           encryptedAnswerKey: encryptedAnswer.wrappedKey,
           contentCommitment: commitment,
           keyId: encryptedContent.keyId,
+          ciphertextSha256: crypto.createHash('sha256').update(encryptedContent.ciphertext).digest('hex'),
+          answerCiphertextSha256: crypto.createHash('sha256').update(encryptedAnswer.ciphertext).digest('hex'),
         },
       });
     });
