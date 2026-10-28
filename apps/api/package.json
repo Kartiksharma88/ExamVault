@@ -19,6 +19,7 @@
   "dependencies": {
     "@casl/ability": "^6.7.0",
     "@casl/prisma": "^1.4.0",
+    "@examvault/audit-canonical": "workspace:*",
     "@examvault/shared": "workspace:*",
     "@nestjs/common": "^10.4.0",
     "@nestjs/config": "^3.2.0",

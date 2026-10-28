@@ -29,6 +29,9 @@ export interface KeyProvider {
 
   /** Verify an Ed25519 signature */
   verify(data: Buffer, signature: Buffer): Promise<boolean>;
+
+  /** Secret key for actor pseudonymization (HMAC-SHA-256) */
+  getPseudonymKey(): Buffer;
 }
 
 export const KEY_PROVIDER = 'KEY_PROVIDER';

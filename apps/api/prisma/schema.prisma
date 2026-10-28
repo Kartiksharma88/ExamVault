@@ -287,6 +287,8 @@ model QuestionVersion {
   // Integrity
   contentCommitment   String             @map("content_commitment") @db.VarChar(128)
   keyId               String             @map("key_id") @db.VarChar(64)
+  ciphertextSha256       String?            @map("ciphertext_sha256") @db.VarChar(64)
+  answerCiphertextSha256 String?            @map("answer_ciphertext_sha256") @db.VarChar(64)
 
   // Step 2 versioning additions
   parentVersionId     String?            @map("parent_version_id") @db.Uuid
@@ -580,25 +582,105 @@ model ValidStateTransition {
   @@map("valid_state_transitions")
 }
 
-// ── Audit Log ──────────────────────────────────────────────────────
+// ── Audit Log & Tamper-Evident Registration (Step 3) ──────────────────
 
 model AuditEvent {
-  id         String   @id @default(uuid()) @db.Uuid
-  timestamp  DateTime @default(now())
-  actorId    String?  @map("actor_id") @db.Uuid
-  action     String   @db.VarChar(64)
-  targetType String   @map("target_type") @db.VarChar(64)
-  targetId   String?  @map("target_id") @db.VarChar(255)
-  metadata   Json?    @db.JsonB
-  prevHash   String   @map("prev_hash") @db.VarChar(128)
-  entryHash  String   @map("entry_hash") @db.VarChar(128)
-  signature  String   @db.VarChar(256)
+  id                String   @id @default(uuid()) @db.Uuid
+  timestamp         DateTime @default(now())
+  schemaVersion     String   @default("1.0.0") @map("schema_version") @db.VarChar(16)
+  actorId           String?  @map("actor_id") @db.Uuid
+  actorPseudonym    String?  @map("actor_pseudonym") @db.VarChar(64)
+  action            String   @db.VarChar(64)
+  targetType        String   @map("target_type") @db.VarChar(64)
+  targetId          String?  @map("target_id") @db.VarChar(255)
+  versionNo         Int?     @map("version_no")
+  payloadHash       String?  @map("payload_hash") @db.VarChar(64)
+  contentCommitment String?  @map("content_commitment") @db.VarChar(128)
+  approvalSignature String?  @map("approval_signature") @db.VarChar(512)
+  metadataHash      String?  @map("metadata_hash") @db.VarChar(64)
+  metadata          Json?    @db.JsonB
+  prevHash          String   @map("prev_hash") @db.VarChar(128)
+  entryHash         String   @map("entry_hash") @db.VarChar(128)
+  signature         String   @db.VarChar(512)
 
-  actor User? @relation(fields: [actorId], references: [id])
+  actor   User?         @relation(fields: [actorId], references: [id])
+  outboxes AuditOutbox[]
 
   @@index([timestamp])
   @@index([actorId])
+  @@index([actorPseudonym])
   @@index([action])
   @@index([targetType, targetId])
+  @@index([entryHash])
   @@map("audit_events")
 }
+
+model AuditOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  eventId       String    @map("event_id") @db.Uuid
+  sinkType      String    @map("sink_type") @db.VarChar(32) // FABRIC, etc.
+  status        String    @default("PENDING") @db.VarChar(32) // PENDING, COMMITTED, FAILED
+  payload       Json      @db.JsonB
+  retryCount    Int       @default(0) @map("retry_count")
+  maxRetries    Int       @default(5) @map("max_retries")
+  lastError     String?   @map("last_error") @db.Text
+  nextRetryAt   DateTime? @map("next_retry_at")
+  committedAt   DateTime? @map("committed_at")
+  fabricTxId    String?   @map("fabric_tx_id") @db.VarChar(128)
+  fabricBlockNo BigInt?   @map("fabric_block_no")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  event AuditEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextRetryAt])
+  @@index([eventId])
+  @@index([sinkType])
+  @@map("audit_outbox")
+}
+
+model MerkleCheckpoint {
+  id               String   @id @default(uuid()) @db.Uuid
+  rootHash         String   @map("root_hash") @db.VarChar(64)
+  rangeStart       Int      @map("range_start")
+  rangeEnd         Int      @map("range_end")
+  eventCount       Int      @map("event_count")
+  treeSize         Int      @map("tree_size")
+  signature        String   @db.VarChar(512) // ExamBody Ed25519 signature
+  witnessSignature String?  @map("witness_signature") @db.VarChar(512)
+  witnessReceipt   Json?    @map("witness_receipt") @db.JsonB
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([rangeStart, rangeEnd])
+  @@index([rootHash])
+  @@map("merkle_checkpoints")
+}
+
+model StorageIntegrityScan {
+  id               String   @id @default(uuid()) @db.Uuid
+  scannedAt        DateTime @default(now()) @map("scanned_at")
+  totalObjects     Int      @map("total_objects")
+  validObjects     Int      @map("valid_objects")
+  corruptedObjects Int      @map("corrupted_objects")
+  missingObjects   Int      @map("missing_objects")
+  orphanedObjects  Int      @map("orphaned_objects")
+  details          Json?    @db.JsonB
+  auditEventId     String?  @map("audit_event_id") @db.Uuid
+
+  @@index([scannedAt])
+  @@map("storage_integrity_scans")
+}
+
+model PlainAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  timestamp   DateTime @default(now())
+  eventType   String   @map("event_type") @db.VarChar(64)
+  subjectType String   @map("subject_type") @db.VarChar(64)
+  subjectId   String   @map("subject_id") @db.VarChar(255)
+  payload     Json?    @db.JsonB
+
+  @@index([timestamp])
+  @@index([eventType])
+  @@map("plain_audit_logs")
+}
+

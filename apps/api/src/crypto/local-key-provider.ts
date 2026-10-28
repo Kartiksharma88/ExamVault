@@ -82,4 +82,9 @@ export class LocalKeyProvider implements KeyProvider {
   async verify(data: Buffer, signature: Buffer): Promise<boolean> {
     return crypto.verify(null, data, this.verifyKey, signature);
   }
+
+  getPseudonymKey(): Buffer {
+    // Derive a dedicated 256-bit pseudonymization key from master key using HMAC-SHA-256
+    return crypto.createHmac('sha256', this.masterKey).update('examvault-pseudonym-salt-v1').digest();
+  }
 }
