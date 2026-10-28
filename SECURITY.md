@@ -107,3 +107,44 @@ prev_hash:       prev_hash:      prev_hash:
 - If `originality-service` becomes unreachable or crashes, submitted question versions are **never silently approved or skipped**.
 - Versions remain in `SCREENING` state with retry backoff.
 - The administrator console displays a live health indicator and alerts moderators if background jobs accumulate.
+
+---
+
+## 5. Step 3: Multi-Ledger Audit Layer Threat Model
+
+Step 3 introduces dual tamper-evident audit architectures:
+- **Design A**: Permissioned Hyperledger Fabric blockchain (3-organization consortium with 2-of-3 majority endorsement policy and Raft consensus).
+- **Design B**: Hardened signed hash chain with RFC 6962 Merkle checkpoints and an independent External Witness service.
+
+### 5.1 Simulated Organizational Independence
+- **Prototype Reality**: In this local development and test environment, all three organizations (`ExamBodyMSP`, `UniversityMSP`, `AuditorMSP`), their respective Certificate Authorities, Raft orderer consenters, and peers run as separate Docker containers on a **single host machine**.
+- **Security Limitation**: A host-level root compromise or kernel escape compromises all organizations simultaneously.
+- **Production Requirement**: For true Byzantine fault tolerance and organizational independence, peers and orderers must be geographically and administratively distributed across distinct cloud providers / data centers with physically isolated HSMs and network perimeters.
+
+### 5.2 Actor Pseudonymization Limits & India's DPDP Act Compliance
+- **The Immutability Dilemma**: Blockchains and append-only hash chains are permanent. Under India's Digital Personal Data Protection (DPDP) Act 2023, data principals have the right to correction and erasure of their personal data. Storing names, emails, employee IDs, or IP addresses directly on an immutable ledger violates the DPDP Act.
+- **ExamVault Mitigation**:
+  $$\text{ActorPseudonym} = \text{HMAC-SHA-256}(\text{UserId}, \text{KeyProviderSecret})$$
+  Zero personal data or plaintext content is written to any ledger.
+- **Honest Limits of Pseudonymization**:
+  1. *Key Compromise*: If an adversary compromises the `KeyProvider` pseudonym key, all pseudonyms can be reversed to identify users.
+  2. *Linkage & Traffic Analysis*: If an adversary observes an actor performing actions at specific timestamps, they can correlate pseudonyms with real-world activity through timing and metadata analysis (side-channel linkage). Pseudonymization reduces liability but is not equivalent to complete anonymization.
+
+### 5.3 External Witness Trust Model (Design B)
+- **Why the Witness is Required**: In an in-database hash chain, an insider holding database administrator credentials and the Ed25519 signing key can silently rewrite the entire table from genesis and regenerate all signatures (Tamper Scenario 5), or truncate recent entries (Tamper Scenario 4).
+- **Witness Role**: The External Witness is an independent, append-only service that countersigns committed Merkle tree roots. It verifies monotonic tree size progression ($S_{t+1} \ge S_t$) and raises an immediate \`409 Conflict\` alert upon receiving a contradictory root for a previously witnessed tree size.
+- **Honest Limitation**: If an attacker compromises both the database server AND the witness service storage, history can be altered. Therefore, the witness service must run under separate administrative control (e.g. by the Auditor).
+
+### 5.4 Honest Scope of Tamper-Evidence
+It is critical to be transparent about what cryptographic audit trails can and cannot accomplish:
+
+| Threat Category | Can Audit Layer Detect / Prevent? | Mechanism & Limitation |
+|-----------------|----------------------------------|------------------------|
+| **Past Event Mutation** | **DETECTS** | SHA-256 forward-chaining and digital signatures break immediately upon any field alteration. |
+| **Middle Event Deletion** | **DETECTS** | Forward \`prev_hash\` link is severed. |
+| **Log Tail Truncation** | **DETECTS** | Witness records higher \`treeSize\`; inclusion proof fails. |
+| **Ciphertext Bitrot / Tampering** | **DETECTS** | Write-time \`ciphertext_sha256\` binding detects mismatch without decrypting. |
+| **Single-Org Compromise (Fabric)** | **DETECTS & MITIGATES** | Fabric requires majority (2 of 3) endorsement; 1 compromised peer cannot commit false state. |
+| **Two-Org Collusion (Fabric)** | **CANNOT DETECT** | If 2 of 3 orgs collude, 2-of-3 endorsement quorum is satisfied. Consensus cannot defeat majority collusion. |
+| **Content Exfiltration / Screen Capture** | **CANNOT PREVENT** | Audit logs record accesses *ex-post*. A log can never prevent an authorized examiner from taking a photo of their monitor. |
+| **Compromised Legitimate Approvers** | **CANNOT PREVENT** | If the required number of legitimate approvers collude to approve a flawed question, signatures are valid. Technical audit trails detect procedural tampering, not malicious human consensus. |

@@ -131,11 +131,107 @@ All accounts require mandatory TOTP MFA enrollment at first login:
 
 ---
 
+## Step 3: Encrypted Storage and Audit Registration
+
+Step 3 implements a dual tamper-evident audit layer comparing **Design A (Hyperledger Fabric)** against **Design B (Hardened Signed Hash Chain + External Witness)**, with write-time ciphertext integrity binding, a transactional outbox, an independent verifier CLI, and experimental evaluations.
+
+### Pinned Versions
+| Component | Pinned Version | Justification |
+|-----------|----------------|---------------|
+| **Hyperledger Fabric** | `2.5.11 LTS` | Current stable Long Term Support release; production standard for permissioned consortium networks. |
+| **Fabric CA** | `1.5.12` | Current compatible release for Fabric 2.5 MSP management and identity enrollment. |
+| **Fabric Gateway SDK** | `@hyperledger/fabric-gateway: ^1.7.1` | Modern gRPC Gateway client SDK for Node.js. |
+| **Fabric Contract API** | `fabric-contract-api: ~2.5.8` | Pinned TypeScript chaincode smart contract API for Fabric 2.5 LTS. |
+| **Fabric Shim** | `fabric-shim: ~2.5.8` | Pinned runtime interface for chaincode stub interactions. |
+| **RFC 8785 Canonicalization** | `canonicalize: ^2.0.0` | Exact byte-for-byte JSON Canonicalization Scheme (JCS) RFC 8785 standard. |
+
+See [docs/step3-decisions.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/step3-decisions.md) for full version rationale.
+
+---
+
+### Step 3 Setup & Operations
+
+#### 1. Running the External Witness Service (Design B)
+The Witness service is an independent append-only service that countersigns Merkle tree checkpoints and detects history rewrite/fork attacks:
+```bash
+# Start the witness service on port 3005
+cd apps/witness-service
+pnpm build
+pnpm start
+```
+Health check: `curl http://localhost:3005/health`
+
+#### 2. Running Hyperledger Fabric Network (Design A)
+The Fabric network consists of 3 organizations (`ExamBodyMSP`, `UniversityMSP`, `AuditorMSP`) with 4 CAs, 3 Raft orderer consenters, and 3 peer nodes enforcing a **majority 2-of-3 endorsement policy**:
+
+On Linux / macOS / WSL2 (Docker required):
+```bash
+cd blockchain/scripts
+chmod +x network.sh
+./network.sh up              # Starts 3 CAs, generates crypto, launches orderers & peers, creates channel
+./network.sh deployChaincode # Deploys audit-registry chaincode with 2-of-3 endorsement policy
+./network.sh status          # Checks network and peer status
+./network.sh down            # Stops containers and tears down network
+```
+
+On Windows PowerShell:
+```powershell
+cd blockchain\scripts
+.\network.ps1 up
+.\network.ps1 deployChaincode
+```
+*(All generated cryptographic materials and MSP certificates are gitignored)*.
+
+#### 3. Running the Independent Verifier CLI (`examvault-verify`)
+The standalone verifier CLI operates with zero business logic dependencies, verifying hash chains, Merkle inclusion proofs, Fabric ledger existence, 2-of-3 endorsement sets, witness consistency, and storage ciphertext hashes:
+
+```bash
+# Run against an exported JSON dataset (offline mode)
+cd packages/examvault-verify
+pnpm build
+node dist/cli.js --export /path/to/dataset-export.json
+
+# Output as JSON
+node dist/cli.js --export /path/to/dataset-export.json --json
+```
+
+#### 4. Running Step 3 Experiments (A to D)
+Every experiment can be executed with a single command, generating both Markdown and CSV reports:
+
+```bash
+# Experiment A: Tamper Detection Matrix (9 scenarios across 4 designs)
+pnpm experiment:tamper
+
+# Experiment B: Performance & Storage Growth Benchmarks (latency p50/p95/p99, throughput, Merkle overhead)
+pnpm experiment:perf
+
+# Experiment C: Failure Injection (peer down, orderer down, quorum loss, witness down, postgres restart)
+pnpm experiment:failure
+
+# Experiment D: Operational Complexity Comparison (setup steps, config lines, container count)
+pnpm experiment:ops
+
+# Run all 4 experiments sequentially
+pnpm experiment:all
+```
+
+Generated reports are located in `docs/experiments/`:
+- [docs/experiments/tamper-matrix.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/experiments/tamper-matrix.md) and `.csv`
+- [docs/experiments/performance-report.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/experiments/performance-report.md) and `.csv`
+- [docs/experiments/failure-injection.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/experiments/failure-injection.md)
+- [docs/experiments/operational-complexity.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/experiments/operational-complexity.md) and `.csv`
+
+---
+
 ## Deliverables & Documentation Index
 
-- [ARCHITECTURE.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/ARCHITECTURE.md) — State machine diagram, screening pipeline sequence, blind review flow, and design justifications.
-- [SECURITY.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/SECURITY.md) — Threat model, server-side signing trust roadmap, originality index privacy trade-offs, and restart costs.
-- [apps/originality-service/originality_evaluation_report.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/apps/originality-service/originality_evaluation_report.md) — Originality evaluation harness report across 365+ labeled test pairs.
-- [openapi.json](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/openapi.json) — Complete OpenAPI 3.0 specification covering all Step 1 and Step 2 endpoints.
-- [apps/api/test/step2-workflow.spec.ts](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/apps/api/test/step2-workflow.spec.ts) — Acceptance tests for separation of duties, blind solve, dual-admin policy, and approval signatures.
-- [scripts/verify-step2-db.js](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/scripts/verify-step2-db.js) — Verification script for database triggers and eligibility views.
+- [docs/step3-decisions.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/step3-decisions.md) — Architectural decisions, pinned version selections, consensus choice (Raft vs SmartBFT), and fault tolerance analysis.
+- [docs/step3-architecture.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/step3-architecture.md) — Detailed event model specification, dual-sink dispatcher architecture, Merkle tree checkpointing, and sequence diagrams.
+- [SECURITY.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/SECURITY.md) — Comprehensive threat model, simulated organizational independence note, India's DPDP Act compliance, actor pseudonymization limits, and the honest scope of tamper-evidence.
+- [docs/experiments/](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/docs/experiments/) — Markdown and CSV reports for Experiments A, B, C, and D.
+- [packages/audit-canonical/](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/packages/audit-canonical/) — RFC 8785 JSON Canonicalization, SHA-256 forward chaining, RFC 6962 Merkle tree, and shared test vectors.
+- [packages/examvault-verify/](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/packages/examvault-verify/) — Independent zero-business-logic auditor verification CLI.
+- [blockchain/](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/blockchain/) — Hyperledger Fabric 2.5 3-organization network scripts, compose topologies, and `audit-registry` TypeScript chaincode.
+- [apps/witness-service/](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/apps/witness-service/) — Standalone append-only External Witness service.
+- [ARCHITECTURE.md](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/ARCHITECTURE.md) — System state machine diagram, screening pipeline sequence, and blind review flow.
+- [openapi.json](file:///c:/Users/G.P.Tech.%20Solutions/Desktop/ExamVault/openapi.json) — Complete OpenAPI 3.0 specification covering Step 1, 2, and 3 audit endpoints.
