@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'blockchain/chaincode/*'
 
 allowBuilds:
   '@nestjs/core': true
@@ -9,3 +10,4 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+  protobufjs: true

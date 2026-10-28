@@ -1,0 +1,108 @@
+version: '3.7'
+
+networks:
+  examvault-net:
+    name: examvault-net
+
+services:
+  peer0.exambody.examvault.local:
+    image: hyperledger/fabric-peer:2.5.11
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=examvault-net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_PROFILE_ENABLED=false
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0.exambody.examvault.local
+      - CORE_PEER_ADDRESS=peer0.exambody.examvault.local:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.exambody.examvault.local:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.exambody.examvault.local:7051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.exambody.examvault.local:7051
+      - CORE_PEER_LOCALMSPID=ExamBodyMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:17051
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - /var/run/:/host/var/run/
+      - ../organizations/peerOrganizations/exambody.examvault.local/peers/peer0.exambody.examvault.local/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/peerOrganizations/exambody.examvault.local/peers/peer0.exambody.examvault.local/tls:/etc/hyperledger/fabric/tls
+    ports:
+      - 7051:7051
+      - 17051:17051
+    container_name: peer0.exambody.examvault.local
+    networks:
+      - examvault-net
+
+  peer0.university.examvault.local:
+    image: hyperledger/fabric-peer:2.5.11
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=examvault-net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_PROFILE_ENABLED=false
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0.university.examvault.local
+      - CORE_PEER_ADDRESS=peer0.university.examvault.local:8051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:8051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.university.examvault.local:8052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:8052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.university.examvault.local:8051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.university.examvault.local:8051
+      - CORE_PEER_LOCALMSPID=UniversityMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:18051
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - /var/run/:/host/var/run/
+      - ../organizations/peerOrganizations/university.examvault.local/peers/peer0.university.examvault.local/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/peerOrganizations/university.examvault.local/peers/peer0.university.examvault.local/tls:/etc/hyperledger/fabric/tls
+    ports:
+      - 8051:8051
+      - 18051:18051
+    container_name: peer0.university.examvault.local
+    networks:
+      - examvault-net
+
+  peer0.auditor.examvault.local:
+    image: hyperledger/fabric-peer:2.5.11
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=examvault-net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_PROFILE_ENABLED=false
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0.auditor.examvault.local
+      - CORE_PEER_ADDRESS=peer0.auditor.examvault.local:9051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.auditor.examvault.local:9052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:9052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.auditor.examvault.local:9051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.auditor.examvault.local:9051
+      - CORE_PEER_LOCALMSPID=AuditorMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:19051
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - /var/run/:/host/var/run/
+      - ../organizations/peerOrganizations/auditor.examvault.local/peers/peer0.auditor.examvault.local/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/peerOrganizations/auditor.examvault.local/peers/peer0.auditor.examvault.local/tls:/etc/hyperledger/fabric/tls
+    ports:
+      - 9051:9051
+      - 19051:19051
+    container_name: peer0.auditor.examvault.local
+    networks:
+      - examvault-net

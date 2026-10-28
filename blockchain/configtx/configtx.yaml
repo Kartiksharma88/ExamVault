@@ -1,0 +1,185 @@
+---
+# ExamVault Channel Configuration (Hyperledger Fabric 2.5 LTS)
+# 3 Organizations: ExamBody, University, Auditor + Raft Ordering Service
+
+Organizations:
+  - &OrdererOrg
+    Name: OrdererOrg
+    ID: OrdererMSP
+    MSPDir: ../organizations/ordererOrganizations/orderer.examvault.local/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+    OrdererEndpoints:
+      - orderer1.orderer.examvault.local:7050
+      - orderer2.orderer.examvault.local:7053
+      - orderer3.orderer.examvault.local:7056
+
+  - &ExamBody
+    Name: ExamBodyMSP
+    ID: ExamBodyMSP
+    MSPDir: ../organizations/peerOrganizations/exambody.examvault.local/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('ExamBodyMSP.admin', 'ExamBodyMSP.peer', 'ExamBodyMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('ExamBodyMSP.admin', 'ExamBodyMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('ExamBodyMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('ExamBodyMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.exambody.examvault.local
+        Port: 7051
+
+  - &University
+    Name: UniversityMSP
+    ID: UniversityMSP
+    MSPDir: ../organizations/peerOrganizations/university.examvault.local/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('UniversityMSP.admin', 'UniversityMSP.peer', 'UniversityMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('UniversityMSP.admin', 'UniversityMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('UniversityMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('UniversityMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.university.examvault.local
+        Port: 8051
+
+  - &Auditor
+    Name: AuditorMSP
+    ID: AuditorMSP
+    MSPDir: ../organizations/peerOrganizations/auditor.examvault.local/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('AuditorMSP.admin', 'AuditorMSP.peer', 'AuditorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('AuditorMSP.admin', 'AuditorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('AuditorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('AuditorMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.auditor.examvault.local
+        Port: 9051
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_5: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  Addresses:
+    - orderer1.orderer.examvault.local:7050
+    - orderer2.orderer.examvault.local:7053
+    - orderer3.orderer.examvault.local:7056
+  EtcdRaft:
+    Consenters:
+      - Host: orderer1.orderer.examvault.local
+        Port: 7050
+        ClientTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer1.orderer.examvault.local/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer1.orderer.examvault.local/tls/server.crt
+      - Host: orderer2.orderer.examvault.local
+        Port: 7053
+        ClientTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer2.orderer.examvault.local/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer2.orderer.examvault.local/tls/server.crt
+      - Host: orderer3.orderer.examvault.local
+        Port: 7056
+        ClientTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer3.orderer.examvault.local/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/orderer.examvault.local/orderers/orderer3.orderer.examvault.local/tls/server.crt
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 100
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 2 MB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  ThreeOrgsApplicationGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities: *OrdererCapabilities
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *ExamBody
+        - *University
+        - *Auditor
+      Capabilities: *ApplicationCapabilities

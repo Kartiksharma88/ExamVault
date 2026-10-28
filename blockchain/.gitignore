@@ -1,0 +1,11 @@
+# Generated crypto material and credentials (DO NOT COMMIT)
+organizations/peerOrganizations/
+organizations/ordererOrganizations/
+organizations/fabric-ca/
+channel-artifacts/
+*.block
+*.tx
+*.tar.gz
+crypto-config/
+.fabric-ca/
+*.id
