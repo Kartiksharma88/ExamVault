@@ -7,6 +7,9 @@ import { SignedLogSink } from './sinks/signed-log.sink';
 import { FabricSink } from './sinks/fabric.sink';
 import { PlainLogSink } from './sinks/plain-log.sink';
 import { FabricGatewayService } from './fabric/fabric-gateway.service';
+import { AuditOutboxWorker } from './outbox/audit-outbox.worker';
+import { AuditReconciliationService } from './reconciliation/audit-reconciliation.service';
+import { AuditCheckpointService } from './checkpoints/audit-checkpoint.service';
 
 @Global()
 @Module({
@@ -19,6 +22,9 @@ import { FabricGatewayService } from './fabric/fabric-gateway.service';
     FabricSink,
     PlainLogSink,
     FabricGatewayService,
+    AuditOutboxWorker,
+    AuditReconciliationService,
+    AuditCheckpointService,
   ],
   exports: [
     AuditService,
@@ -27,6 +33,9 @@ import { FabricGatewayService } from './fabric/fabric-gateway.service';
     FabricSink,
     PlainLogSink,
     FabricGatewayService,
+    AuditOutboxWorker,
+    AuditReconciliationService,
+    AuditCheckpointService,
   ],
 })
 export class AuditModule {}

@@ -138,3 +138,32 @@ describe('EventClassifier', () => {
     expect(classifier.classify('CONTENT_READ')).toBe('CRITICAL');
   });
 });
+
+describe('RFC 6962 MerkleTree and Inclusion Proofs', () => {
+  it('builds a Merkle tree and generates valid inclusion proofs for all leaves', () => {
+    const { MerkleTree } = require('../merkle');
+    const leaves = ['leaf-0', 'leaf-1', 'leaf-2', 'leaf-3', 'leaf-4', 'leaf-5', 'leaf-6'];
+    const tree = new MerkleTree(leaves);
+    const root = tree.getRoot();
+
+    expect(root).toMatch(/^[0-9a-f]{64}$/);
+    expect(tree.getTreeSize()).toBe(7);
+
+    for (let i = 0; i < leaves.length; i++) {
+      const proof = tree.getProof(i);
+      expect(proof.leafIndex).toBe(i);
+      expect(proof.treeSize).toBe(7);
+
+      const isValid = MerkleTree.verifyInclusionProof(proof, root);
+      expect(isValid).toBe(true);
+
+      // Verify tampered proof fails
+      const tamperedProof = {
+        ...proof,
+        leafHash: '0000000000000000000000000000000000000000000000000000000000000000',
+      };
+      expect(MerkleTree.verifyInclusionProof(tamperedProof, root)).toBe(false);
+    }
+  });
+});
+

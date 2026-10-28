@@ -41,3 +41,12 @@ playwright-report/
 test-results/
 .neon
 *.tsbuildinfo
+
+# Blockchain & Crypto Material
+blockchain/organizations/peerOrganizations/
+blockchain/organizations/ordererOrganizations/
+blockchain/organizations/fabric-ca/
+blockchain/channel-artifacts/
+*.block
+*.tx
+
