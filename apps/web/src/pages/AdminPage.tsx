@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   FolderTree,
   UserPlus,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 interface UserItem {
@@ -39,14 +41,28 @@ interface ExamItem {
   }[];
 }
 
-export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
+interface AdminPageProps {
+  initialSubTab?: 'users' | 'syllabus';
+  activeSubTab?: 'users' | 'syllabus';
+  onSubTabChange?: (tab: 'users' | 'syllabus') => void;
+}
+
+export const AdminPage: React.FC<AdminPageProps> = ({
   initialSubTab = 'users',
+  activeSubTab,
+  onSubTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'syllabus'>(initialSubTab);
+  const [internalTab, setInternalTab] = useState<'users' | 'syllabus'>(activeSubTab || initialSubTab);
+  const activeTab = activeSubTab || internalTab;
+
+  const handleSelectTab = (tab: 'users' | 'syllabus') => {
+    setInternalTab(tab);
+    onSubTabChange?.(tab);
+  };
 
   // Users state
   const [users, setUsers] = useState<UserItem[]>([]);
-  const [, setUsersLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
@@ -56,7 +72,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
   // Syllabus state
   const [exams, setExams] = useState<ExamItem[]>([]);
-  const [, setSyllabusLoading] = useState(true);
+  const [syllabusLoading, setSyllabusLoading] = useState(true);
   const [showAddExam, setShowAddExam] = useState(false);
   const [newExamName, setNewExamName] = useState('');
   const [newExamDesc, setNewExamDesc] = useState('');
@@ -98,9 +114,20 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
   };
 
   useEffect(() => {
-    fetchUsers();
-    fetchSyllabus();
-  }, []);
+    if (activeTab === 'users') {
+      fetchUsers();
+    } else {
+      fetchSyllabus();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeSubTab) {
+      setInternalTab(activeSubTab);
+    } else if (initialSubTab) {
+      setInternalTab(initialSubTab);
+    }
+  }, [activeSubTab, initialSubTab]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,7 +238,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
 
         <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
-            onClick={() => setActiveTab('users')}
+            onClick={() => handleSelectTab('users')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'users' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -220,7 +247,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
             <span>Users & Access</span>
           </button>
           <button
-            onClick={() => setActiveTab('syllabus')}
+            onClick={() => handleSelectTab('syllabus')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'syllabus' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -253,13 +280,23 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">Institutional Users & Access Directory</h2>
-            <button
-              onClick={() => setShowCreateUser(true)}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Enroll New User</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={fetchUsers}
+                disabled={usersLoading}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${usersLoading ? 'animate-spin text-red-600' : ''}`} />
+                <span>{usersLoading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+              <button
+                onClick={() => setShowCreateUser(true)}
+                className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Enroll New User</span>
+              </button>
+            </div>
           </div>
 
           {/* Create User Modal */}
@@ -343,18 +380,33 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
           )}
 
           {/* User List Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
-                <tr>
-                  <th className="px-5 py-3.5">Name</th>
-                  <th className="px-5 py-3.5">Email</th>
-                  <th className="px-5 py-3.5">Role</th>
-                  <th className="px-5 py-3.5">MFA Status</th>
-                  <th className="px-5 py-3.5">Enrolled</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          {usersLoading ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs space-y-3">
+              <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Loading User Directory...</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
+                Fetching institutional accounts, cryptographic key statuses, and role privileges
+              </p>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 text-xs shadow-xs">
+              No institutional users found.
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
+                  <tr>
+                    <th className="px-5 py-3.5">Name</th>
+                    <th className="px-5 py-3.5">Email</th>
+                    <th className="px-5 py-3.5">Role</th>
+                    <th className="px-5 py-3.5">MFA Status</th>
+                    <th className="px-5 py-3.5">Enrolled</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-5 py-3.5 font-bold text-slate-900">{u.name}</td>
@@ -387,9 +439,10 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
                     <td className="px-5 py-3.5 text-slate-500">{formatDate(u.createdAt)}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -398,13 +451,23 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">Syllabus Taxonomy Tree</h2>
-            <button
-              onClick={() => setShowAddExam(true)}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Add Exam</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={fetchSyllabus}
+                disabled={syllabusLoading}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syllabusLoading ? 'animate-spin text-red-600' : ''}`} />
+                <span>{syllabusLoading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+              <button
+                onClick={() => setShowAddExam(true)}
+                className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Add Exam</span>
+              </button>
+            </div>
           </div>
 
           {/* Add Exam Form */}
@@ -444,9 +507,28 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
           )}
 
           {/* Exam Hierarchy */}
-          <div className="space-y-4">
-            {exams.map((exam) => (
-              <div key={exam.id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
+          {syllabusLoading ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs space-y-3">
+              <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Fetching Syllabus Taxonomy Tree...</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
+                Loading hierarchical exam definitions, subjects, topics, and curriculum taxonomy
+              </p>
+            </div>
+          ) : exams.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs space-y-3">
+              <FolderTree className="w-10 h-10 text-slate-300 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-800">No Syllabus Trees Configured</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Get started by clicking &quot;Add Exam&quot; to configure your institution&apos;s curriculum taxonomy.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {exams.map((exam) => (
+                <div key={exam.id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div className="flex items-center space-x-2.5">
                     <FolderTree className="w-5 h-5 text-red-600" />
@@ -613,6 +695,7 @@ export const AdminPage: React.FC<{ initialSubTab?: 'users' | 'syllabus' }> = ({
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
     </div>

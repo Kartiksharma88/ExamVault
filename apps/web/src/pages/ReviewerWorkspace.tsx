@@ -10,6 +10,8 @@ import {
   Lock,
   ArrowRight,
   Sliders,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 interface Assignment {
@@ -236,9 +238,14 @@ export const ReviewerWorkspace: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-3">
-        <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-slate-500 font-mono">Loading Reviewer Queue...</p>
+      <div className="w-full bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-xs space-y-3 my-8">
+        <div className="inline-flex p-3 rounded-full bg-blue-50 text-blue-600 mb-1">
+          <Loader2 className="w-7 h-7 animate-spin" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Loading Blind Review Queue...</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto font-mono">
+          Fetching assigned double-blind peer review items and verifying blind cryptographic commitments
+        </p>
       </div>
     );
   }
@@ -246,7 +253,7 @@ export const ReviewerWorkspace: React.FC = () => {
   // If no assignment selected, show Review Queue
   if (!selectedAssignmentId || !workspace) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Independent Blind Review Queue</h1>
@@ -255,6 +262,14 @@ export const ReviewerWorkspace: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center space-x-2">
+            <button
+              onClick={fetchQueue}
+              disabled={loading}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+              <span>{loading ? 'Refreshing...' : 'Refresh Queue'}</span>
+            </button>
             <span className="flex items-center text-xs font-mono bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-md font-medium">
               <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
               Cryptographic Commitment Bound
@@ -268,6 +283,7 @@ export const ReviewerWorkspace: React.FC = () => {
             <span>{error}</span>
           </div>
         )}
+
 
         {queue.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-3 shadow-xs">
@@ -299,8 +315,15 @@ export const ReviewerWorkspace: React.FC = () => {
                     const top = item.topicName || item.questionVersion?.question?.topic?.name;
                     const qType = item.type || item.questionVersion?.question?.type || 'MCQ_SINGLE';
 
+                    const isOpening = actionLoading && selectedAssignmentId === item.id;
+
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <tr
+                        key={item.id}
+                        className={`transition-colors ${
+                          isOpening ? 'bg-slate-100/90 ring-1 ring-slate-300' : 'hover:bg-slate-50'
+                        }`}
+                      >
                         <td className="px-6 py-4 font-mono font-medium text-slate-900">
                           <span className="font-bold text-slate-900">{qId}</span>
                           <span className="text-xs text-slate-400 block font-normal">v{vNo}</span>
@@ -337,10 +360,26 @@ export const ReviewerWorkspace: React.FC = () => {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => openWorkspace(item.id)}
-                            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-lg shadow-xs transition-colors"
+                            disabled={actionLoading}
+                            className={`inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg shadow-xs transition-all ${
+                              isOpening
+                                ? 'bg-slate-800 text-white cursor-wait ring-2 ring-red-500/50'
+                                : actionLoading
+                                ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                                : 'bg-slate-900 hover:bg-slate-800 text-white hover:scale-[1.02] active:scale-[0.98]'
+                            }`}
                           >
-                            <span>{item.status === 'COMPLETED' ? 'View Review' : 'Enter Workspace'}</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            {isOpening ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
+                                <span>{item.status === 'COMPLETED' ? 'Opening Review...' : 'Opening Workspace...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>{item.status === 'COMPLETED' ? 'View Review' : 'Enter Workspace'}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </>
+                            )}
                           </button>
                         </td>
                       </tr>
@@ -364,7 +403,7 @@ export const ReviewerWorkspace: React.FC = () => {
   const isEvaluatePhase = workspace.phase === 'EVALUATE' || isCompleted;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Top Banner & Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
         <div>

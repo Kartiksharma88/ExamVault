@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { KeyRound, Lock, Mail, ArrowRight, CheckCircle2, AlertCircle, Copy, Check } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, verifyMfa, mfaPending } = useAuth();
+  const { login, verifyMfa, cancelMfa, mfaPending } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,6 +53,63 @@ export const LoginPage: React.FC = () => {
     setPassword(quickPass);
   };
 
+  const borderWrapperRef = useRef<HTMLDivElement>(null);
+  const currentAngleRef = useRef<number>(0);
+  const targetAngleRef = useRef<number>(0);
+  const lastMoveTimeRef = useRef<number>(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!borderWrapperRef.current) return;
+      const rect = borderWrapperRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const dx = e.clientX - centerX;
+      const dy = e.clientY - centerY;
+      const deg = Math.atan2(dy, dx) * (180 / Math.PI);
+      const mouseAngle = (deg + 90 + 360) % 360;
+      targetAngleRef.current = mouseAngle - 105;
+      lastMoveTimeRef.current = performance.now();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+    const tick = () => {
+      const now = performance.now();
+      const idleTime = now - lastMoveTimeRef.current;
+
+      if (idleTime < 1000) {
+        // Active cursor movement: smoothly lerp towards targetAngle
+        const target = targetAngleRef.current;
+        const current = currentAngleRef.current;
+        const diff = ((target - current + 180) % 360 + 360) % 360 - 180;
+        currentAngleRef.current += diff * 0.12;
+      } else {
+        // Idle cursor: slowly revolve around the box
+        currentAngleRef.current = (currentAngleRef.current + 0.45) % 360;
+      }
+
+      if (borderWrapperRef.current) {
+        borderWrapperRef.current.style.setProperty(
+          '--beam-angle',
+          `${currentAngleRef.current.toFixed(2)}deg`
+        );
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col justify-center items-center px-4 bg-[#f8fafc] relative overflow-hidden">
       {/* Subtle executive background accents */}
@@ -75,13 +132,37 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-7 sm:p-8 border border-slate-200 shadow-xl shadow-slate-200/50">
-          {error && (
-            <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 flex items-start space-x-3 text-red-800 text-sm">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
+        {/* Dynamic Glowing Border Container */}
+        <div
+          ref={borderWrapperRef}
+          className="relative p-[1.5px] rounded-[1.25rem] transition-shadow duration-500 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-red-500/10"
+        >
+          {/* Ambient red halo behind border */}
+          <div
+            className="absolute -inset-[1px] rounded-[1.28rem] opacity-45 blur-[3px] pointer-events-none transition-opacity duration-300"
+            style={{
+              background:
+                'conic-gradient(from var(--beam-angle, 0deg) at 50% 50%, transparent 0deg, transparent 40deg, rgba(239, 68, 68, 0.1) 70deg, rgba(239, 68, 68, 0.7) 95deg, rgba(220, 38, 38, 0.8) 105deg, rgba(239, 68, 68, 0.7) 115deg, rgba(239, 68, 68, 0.1) 140deg, transparent 170deg, transparent 360deg)',
+            }}
+          />
+
+          {/* Sharp laser-tracing perimeter border beam */}
+          <div
+            className="absolute inset-0 rounded-[1.25rem] pointer-events-none"
+            style={{
+              background:
+                'conic-gradient(from var(--beam-angle, 0deg) at 50% 50%, #e2e8f0 0deg, #e2e8f0 50deg, rgba(239, 68, 68, 0.4) 80deg, #ef4444 98deg, #dc2626 105deg, #ef4444 112deg, rgba(239, 68, 68, 0.4) 130deg, #e2e8f0 160deg, #e2e8f0 360deg)',
+            }}
+          />
+
+          {/* Inner Card */}
+          <div className="relative bg-white rounded-[1.125rem] p-7 sm:p-8 z-10">
+            {error && (
+              <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 flex items-start space-x-3 text-red-800 text-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
           {!mfaPending ? (
             /* Standard Login Form */
@@ -189,16 +270,39 @@ export const LoginPage: React.FC = () => {
                   placeholder="000000"
                   className="w-full py-3 text-center tracking-[0.5em] text-xl font-mono bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all font-bold"
                 />
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
+                  <span>Dev Test Code: <strong className="font-mono text-slate-800">123456</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setTotpToken('123456')}
+                    className="text-xs text-red-600 hover:text-red-700 font-semibold underline"
+                  >
+                    Auto-fill (123456)
+                  </button>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || totpToken.length !== 6}
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-slate-900 hover:bg-black transition-all shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
-              >
-                <span>{loading ? 'Verifying...' : 'Verify & Continue'}</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="submit"
+                  disabled={loading || totpToken.length !== 6}
+                  className="w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-slate-900 hover:bg-black transition-all shadow-sm disabled:opacity-50 flex items-center justify-center space-x-2"
+                >
+                  <span>{loading ? 'Verifying...' : 'Verify & Continue'}</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setTotpToken('');
+                    cancelMfa();
+                  }}
+                  className="w-full py-2 text-xs text-slate-500 hover:text-slate-800 transition-colors text-center"
+                >
+                  ← Back to Login
+                </button>
+              </div>
             </form>
           )}
 
@@ -256,5 +360,6 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };

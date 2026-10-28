@@ -8,6 +8,8 @@ import {
   Clock,
   KeyRound,
   Lock,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 export const ModeratorConsole: React.FC = () => {
@@ -15,6 +17,7 @@ export const ModeratorConsole: React.FC = () => {
     'duplicates' | 'disagreements' | 'ready' | 'overdue' | 'staffing'
   >('duplicates');
 
+  const [queueLoading, setQueueLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export const ModeratorConsole: React.FC = () => {
 
   // Fetch moderation queue
   const fetchQueue = async () => {
+    setQueueLoading(true);
     try {
       const res = await apiRequest<{ success: boolean; data: any }>('/moderation/queue');
       if (res.data) {
@@ -60,6 +64,8 @@ export const ModeratorConsole: React.FC = () => {
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setQueueLoading(false);
     }
   };
 
@@ -139,7 +145,7 @@ export const ModeratorConsole: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Console Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
         <div>
@@ -149,6 +155,14 @@ export const ModeratorConsole: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={fetchQueue}
+            disabled={queueLoading}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${queueLoading ? 'animate-spin text-purple-600' : ''}`} />
+            <span>{queueLoading ? 'Refreshing...' : 'Refresh Queue'}</span>
+          </button>
           <span className="flex items-center text-xs font-mono bg-purple-50 text-purple-800 border border-purple-200 px-3 py-1.5 rounded-md font-medium">
             <Lock className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
             Moderator Separation of Duties Enforced
@@ -205,8 +219,21 @@ export const ModeratorConsole: React.FC = () => {
         })}
       </div>
 
-      {/* Tab 1: Duplicate Flags Table */}
-      {activeTab === 'duplicates' && (
+      {/* Tab Panels */}
+      {queueLoading ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-xs space-y-3">
+          <div className="inline-flex p-3 rounded-full bg-purple-50 text-purple-600 mb-1">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">Loading Moderator Queue...</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
+            Fetching duplicate originality flags, reviewer blind disagreements, and pending final sign-offs
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Tab 1: Duplicate Flags Table */}
+          {activeTab === 'duplicates' && (
         <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
           {duplicateItems.length === 0 ? (
             <div className="p-12 text-center text-slate-500">
@@ -407,6 +434,8 @@ export const ModeratorConsole: React.FC = () => {
           <p className="font-semibold text-slate-800">Staffing Quotas Met</p>
           <p className="text-xs">All active subjects have at least 2 independent eligible reviewers available without conflict.</p>
         </div>
+      )}
+      </>
       )}
 
       {/* Duplicate Disposition Modal */}

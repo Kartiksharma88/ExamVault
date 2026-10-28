@@ -10,6 +10,7 @@ import {
   Hash,
   ChevronDown,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 
 interface AuditEventItem {
@@ -103,23 +104,33 @@ export const AuditorPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleVerifyChain}
-          disabled={verifying}
-          className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-slate-900 hover:bg-black shadow-xs transition-all disabled:opacity-50"
-        >
-          {verifying ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Verifying Cryptographic Ledger...</span>
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Verify Cryptographic Chain</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={fetchEvents}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs text-slate-700 bg-slate-100 hover:bg-slate-200 shadow-xs transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-red-600' : ''}`} />
+            <span>{loading ? 'Refreshing...' : 'Refresh Feed'}</span>
+          </button>
+          <button
+            onClick={handleVerifyChain}
+            disabled={verifying}
+            className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-slate-900 hover:bg-black shadow-xs transition-all disabled:opacity-50"
+          >
+            {verifying ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Verifying Cryptographic Ledger...</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Verify Cryptographic Chain</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Verification Results Banner */}
@@ -202,8 +213,14 @@ export const AuditorPage: React.FC = () => {
 
       {/* Audit Log Table */}
       {loading ? (
-        <div className="py-16 text-center text-slate-500 text-sm bg-white rounded-2xl border border-slate-200">
-          Loading signed cryptographic audit events...
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs space-y-3">
+          <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">Loading Cryptographic Audit Trail...</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
+            Fetching Ed25519-signed append-only ledger entries and cryptographic hash commitments
+          </p>
         </div>
       ) : events.length === 0 ? (
         <div className="bg-white rounded-2xl p-10 text-center border border-slate-200 text-slate-500 text-sm shadow-xs">

@@ -23,6 +23,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ requireMfa?: boolean; mustSetupMfa?: boolean }>;
   setupMfa: () => Promise<void>;
   verifyMfa: (token: string) => Promise<void>;
+  cancelMfa: () => void;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -127,6 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await refreshProfile();
   };
 
+  const cancelMfa = () => {
+    setMfaPending(null);
+  };
+
   const logout = async () => {
     try {
       await apiRequest('/auth/logout', { method: 'POST' });
@@ -148,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         setupMfa,
         verifyMfa,
+        cancelMfa,
         logout,
         refreshProfile,
       }}

@@ -9,6 +9,8 @@ import {
   Lock,
   Plus,
   Database,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 export const AdminPoliciesPage: React.FC = () => {
@@ -18,6 +20,10 @@ export const AdminPoliciesPage: React.FC = () => {
   const [policies, setPolicies] = useState<any[]>([]);
   const [originalityHealth, setOriginalityHealth] = useState<any | null>(null);
   const [corpusSources, setCorpusSources] = useState<any[]>([]);
+
+  const [policiesLoading, setPoliciesLoading] = useState<boolean>(true);
+  const [originalityLoading, setOriginalityLoading] = useState<boolean>(true);
+  const [corpusLoading, setCorpusLoading] = useState<boolean>(true);
 
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +45,7 @@ export const AdminPoliciesPage: React.FC = () => {
 
   // Fetch policies
   const fetchPolicies = async () => {
+    setPoliciesLoading(true);
     try {
       const data = await apiRequest<{ success: boolean; data: any[] }>('/policies');
       if (data.success) {
@@ -46,34 +53,47 @@ export const AdminPoliciesPage: React.FC = () => {
       }
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setPoliciesLoading(false);
     }
   };
 
   // Fetch originality health
   const fetchOriginalityHealth = async () => {
+    setOriginalityLoading(true);
     try {
       const data = await apiRequest<any>('/originality/health');
       setOriginalityHealth(data);
     } catch (e: any) {
       setOriginalityHealth({ available: false, error: e.message });
+    } finally {
+      setOriginalityLoading(false);
     }
   };
 
   // Fetch corpus
   const fetchCorpus = async () => {
+    setCorpusLoading(true);
     try {
       const data = await apiRequest<{ success: boolean; data: any[] }>('/corpus/sources');
       if (data.success) {
         setCorpusSources(data.data);
       }
-    } catch (e: any) {}
+    } catch (e: any) {
+    } finally {
+      setCorpusLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchPolicies();
-    fetchOriginalityHealth();
-    fetchCorpus();
-  }, []);
+    if (activeSubTab === 'policies') {
+      fetchPolicies();
+    } else if (activeSubTab === 'originality') {
+      fetchOriginalityHealth();
+    } else if (activeSubTab === 'corpus') {
+      fetchCorpus();
+    }
+  }, [activeSubTab]);
 
   // Propose Policy Submit
   const handleProposePolicy = async () => {
@@ -168,7 +188,7 @@ export const AdminPoliciesPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
         <div>
@@ -232,28 +252,55 @@ export const AdminPoliciesPage: React.FC = () => {
             <p className="text-xs text-slate-500">
               Policies define reviewer thresholds and workflow requirements. Two distinct administrators are strictly required to enact any policy.
             </p>
-            <button
-              onClick={() => setShowProposeModal(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Propose New Policy</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={fetchPolicies}
+                disabled={policiesLoading}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${policiesLoading ? 'animate-spin text-red-600' : ''}`} />
+                <span>{policiesLoading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+              <button
+                onClick={() => setShowProposeModal(true)}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Propose New Policy</span>
+              </button>
+            </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-            <table className="w-full text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4">Version & Scope</th>
-                  <th className="px-6 py-4">Reviewers Required</th>
-                  <th className="px-6 py-4">Blind Solve & Moderator</th>
-                  <th className="px-6 py-4">Thresholds</th>
-                  <th className="px-6 py-4">Dual-Control Status</th>
-                  <th className="px-6 py-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          {policiesLoading ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-xs space-y-3">
+              <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Loading Approval Policies...</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
+                Fetching dual-control governance policies, reviewer thresholds, and active version constraints
+              </p>
+            </div>
+          ) : policies.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 text-xs shadow-xs space-y-2">
+              <ShieldCheck className="w-10 h-10 text-slate-300 mx-auto" />
+              <p className="font-semibold text-slate-700">No Institutional Policies Found</p>
+              <p className="text-[11px] text-slate-400">Click &quot;Propose New Policy&quot; above to create a dual-control workflow rule.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4">Version & Scope</th>
+                    <th className="px-6 py-4">Reviewers Required</th>
+                    <th className="px-6 py-4">Blind Solve & Moderator</th>
+                    <th className="px-6 py-4">Thresholds</th>
+                    <th className="px-6 py-4">Dual-Control Status</th>
+                    <th className="px-6 py-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
                 {policies.map((p) => {
                   const isCurrentAdminProposer = p.proposedById === user?.id;
                   return (
@@ -313,6 +360,7 @@ export const AdminPoliciesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 
@@ -328,13 +376,24 @@ export const AdminPoliciesPage: React.FC = () => {
             </div>
             <button
               onClick={fetchOriginalityHealth}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+              disabled={originalityLoading}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
             >
-              Ping Service
+              {originalityLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />}
+              <span>{originalityLoading ? 'Pinging...' : 'Ping Service'}</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {originalityLoading && !originalityHealth ? (
+            <div className="py-12 text-center space-y-3">
+              <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-900">Querying Originality Microservice...</h4>
+              <p className="text-xs text-slate-500 font-mono">Pinging isolated Python engine health and memory-only index status</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-1">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Service Status</span>
               <div className="flex items-center space-x-2">
@@ -370,6 +429,7 @@ export const AdminPoliciesPage: React.FC = () => {
               <span className="text-[10px] text-slate-400 block">Docker network internal: true enforced</span>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -433,23 +493,42 @@ export const AdminPoliciesPage: React.FC = () => {
               <button
                 disabled={actionLoading || !corpusName.trim() || !corpusDocText.trim()}
                 onClick={handleAddCorpusDoc}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg shadow-xs transition-colors inline-flex items-center justify-center space-x-2"
               >
-                {actionLoading ? 'Indexing Corpus...' : 'Index Document in Originality Engine'}
+                {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
+                <span>{actionLoading ? 'Indexing Document into Originality Engine...' : 'Index Document in Originality Engine'}</span>
               </button>
             </div>
           </div>
 
           <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-            <div className="pb-2 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Loaded Corpus Sources</h3>
-              <p className="text-xs text-slate-500">
-                Corpora active in the screening index.
-              </p>
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Loaded Corpus Sources</h3>
+                <p className="text-xs text-slate-500">
+                  Corpora active in the screening index.
+                </p>
+              </div>
+              <button
+                onClick={fetchCorpus}
+                disabled={corpusLoading}
+                className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${corpusLoading ? 'animate-spin text-red-600' : ''}`} />
+                <span>{corpusLoading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
             </div>
 
             <div className="space-y-2">
-              {corpusSources.length === 0 ? (
+              {corpusLoading ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl py-12 px-6 text-center shadow-xs space-y-3">
+                  <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">Loading Corpus Sources...</h4>
+                  <p className="text-xs text-slate-500 font-mono max-w-sm mx-auto">Fetching indexed reference past papers and public benchmark test banks</p>
+                </div>
+              ) : corpusSources.length === 0 ? (
                 <div className="text-xs text-slate-400 p-4 text-center">No corpus sources registered yet.</div>
               ) : (
                 corpusSources.map((cs) => (

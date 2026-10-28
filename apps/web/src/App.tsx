@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
@@ -25,12 +25,56 @@ const queryClient = new QueryClient({
   },
 });
 
+const getDefaultTabForRole = (role?: string): string => {
+  switch (role) {
+    case 'ADMIN':
+      return 'admin-users';
+    case 'AUDITOR':
+      return 'audit';
+    case 'REVIEWER':
+      return 'review-queue';
+    case 'MODERATOR':
+      return 'moderator-console';
+    case 'EXAMINER':
+    default:
+      return 'dashboard';
+  }
+};
+
+const isTabAllowedForRole = (tab: string, role?: string): boolean => {
+  if (tab === 'stats') return true;
+  switch (role) {
+    case 'ADMIN':
+      return ['admin-users', 'admin-syllabus', 'admin-policies', 'audit', 'stats'].includes(tab);
+    case 'AUDITOR':
+      return ['audit', 'stats'].includes(tab);
+    case 'REVIEWER':
+      return ['review-queue', 'stats'].includes(tab);
+    case 'MODERATOR':
+      return ['moderator-console', 'stats'].includes(tab);
+    case 'EXAMINER':
+      return ['dashboard', 'editor', 'import', 'stats'].includes(tab);
+    default:
+      return false;
+  }
+};
+
 const MainLayout: React.FC = () => {
   const { user, loading } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [historyQuestionId, setHistoryQuestionId] = useState<string | null>(null);
   const [feedbackQuestionId, setFeedbackQuestionId] = useState<string | null>(null);
+
+  // Automatically reset tab and modals whenever authenticated user changes
+  useEffect(() => {
+    if (user) {
+      setCurrentTab(getDefaultTabForRole(user.role));
+      setEditingQuestionId(null);
+      setHistoryQuestionId(null);
+      setFeedbackQuestionId(null);
+    }
+  }, [user?.id, user?.role]);
 
   if (loading) {
     return (
@@ -47,17 +91,12 @@ const MainLayout: React.FC = () => {
     return <LoginPage />;
   }
 
-  // Adjust default tab based on user role
-  const resolvedTab =
-    user.role === 'ADMIN' && currentTab === 'dashboard'
-      ? 'admin-users'
-      : user.role === 'AUDITOR' && currentTab === 'dashboard'
-      ? 'audit'
-      : user.role === 'REVIEWER' && currentTab === 'dashboard'
-      ? 'review-queue'
-      : user.role === 'MODERATOR' && currentTab === 'dashboard'
-      ? 'moderator-console'
-      : currentTab;
+  // Ensure resolvedTab is strictly authorized and appropriate for user's current role
+  const resolvedTab = isTabAllowedForRole(currentTab, user.role)
+    ? currentTab === 'dashboard' && user.role !== 'EXAMINER'
+      ? getDefaultTabForRole(user.role)
+      : currentTab
+    : getDefaultTabForRole(user.role);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-red-600 selection:text-white">
@@ -105,8 +144,14 @@ const MainLayout: React.FC = () => {
         {resolvedTab === 'moderator-console' && <ModeratorConsole />}
 
         {/* Admin Tabs */}
-        {resolvedTab === 'admin-users' && <AdminPage initialSubTab="users" />}
-        {resolvedTab === 'admin-syllabus' && <AdminPage initialSubTab="syllabus" />}
+        {(resolvedTab === 'admin-users' || resolvedTab === 'admin-syllabus') && (
+          <AdminPage
+            activeSubTab={resolvedTab === 'admin-syllabus' ? 'syllabus' : 'users'}
+            onSubTabChange={(subTab) => {
+              setCurrentTab(subTab === 'syllabus' ? 'admin-syllabus' : 'admin-users');
+            }}
+          />
+        )}
         {resolvedTab === 'admin-policies' && <AdminPoliciesPage />}
 
         {/* Auditor Tab */}

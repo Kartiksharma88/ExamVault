@@ -14,6 +14,8 @@ import {
   ChevronRight,
   Send,
   MessageSquare,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 interface QuestionItem {
@@ -153,13 +155,23 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onCreateNew}
-          className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-sm hover:shadow transition-all"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Author New Question</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={fetchQuestions}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-red-600' : ''}`} />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+          <button
+            onClick={onCreateNew}
+            className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-sm hover:shadow transition-all"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Author New Question</span>
+          </button>
+        </div>
       </div>
 
       {/* Metrics Row */}
@@ -231,9 +243,14 @@ export const ExaminerDashboard: React.FC<ExaminerDashboardProps> = ({
 
       {/* Question List */}
       {loading ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
-          <div className="inline-block w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <p className="text-sm text-slate-500">Retrieving encrypted question bank metadata...</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center shadow-xs space-y-3">
+          <div className="inline-flex p-3 rounded-full bg-red-50 text-red-600 mb-1">
+            <Loader2 className="w-7 h-7 animate-spin" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">Loading Question Bank...</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto font-mono">
+            Retrieving encrypted question bank metadata and blind cryptographic commitments
+          </p>
         </div>
       ) : filteredQuestions.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-slate-300 shadow-xs">
