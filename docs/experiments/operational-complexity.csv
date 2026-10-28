@@ -1,0 +1,4 @@
+Design,Setup Steps,Config Files,Config LoC,Runtime Components,Cert Overhead,Disaster Recovery
+"Baseline 0: PlainLog (Unsigned Table)",1,1,12,1,"None","Low (pg_restore from dump). Zero cryptographic re-keying."
+"Design B: Signed Hash Chain + External Witness",3,4,185,2,"Low (2 asymmetric Ed25519 keypairs: ExamBody + Witness)","Low-to-Medium (Restore DB dump; witness independently reconciles monotonic treeSize)"
+"Design A: Hyperledger Fabric (3-Org Consortium)",9,14,1420,10,"High (X.509 PKI, TLS root CAs, mTLS certificates, MSP folder hierarchy, expiration monitoring)","High (Orderer Raft snapshot restore, ledger state resynchronization, channel genesis block tracking)"

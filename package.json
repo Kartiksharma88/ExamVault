@@ -14,7 +14,12 @@
     "db:generate": "pnpm --filter @examvault/api run db:generate",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "experiment:tamper": "tsx scripts/experiments/tamper-matrix.ts",
+    "experiment:perf": "tsx scripts/experiments/performance-bench.ts",
+    "experiment:failure": "tsx scripts/experiments/failure-injection.ts",
+    "experiment:ops": "tsx scripts/experiments/operational-complexity.ts",
+    "experiment:all": "tsx scripts/experiments/tamper-matrix.ts && tsx scripts/experiments/performance-bench.ts && tsx scripts/experiments/failure-injection.ts && tsx scripts/experiments/operational-complexity.ts"
   },
   "engines": {
     "node": ">=20.0.0",

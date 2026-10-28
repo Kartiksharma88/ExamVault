@@ -1,0 +1,10 @@
+Scenario,Scenario Name,PlainLog Detected,Design B (No Witness),Design B (With Witness),Design A (Fabric)
+"1","Modify field in past event row","NO","YES","YES","YES"
+"2","Delete a middle event","NO","YES","YES","YES"
+"3","Reorder events","NO","YES","YES","YES"
+"4","Truncate the tail of the log","NO","NO","YES","YES"
+"5","Rewrite entire chain with legitimate signing key","NO","NO","YES","YES"
+"6","Rewrite chain plus compromise witness storage","NO","NO","NO","YES"
+"7","Replace stored ciphertext object","NO","YES","YES","YES"
+"8","Compromise one Fabric organization (peer state alteration)","NO","NO","NO","YES"
+"9","Compromise two of three organizations (policy collusion)","NO","NO","YES","NO"
