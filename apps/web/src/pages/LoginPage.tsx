@@ -311,7 +311,7 @@ export const LoginPage: React.FC = () => {
             <p className="text-[11px] font-mono uppercase text-slate-400 text-center mb-2 tracking-wide">
               Quick Test Credentials
             </p>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
               <button
                 type="button"
                 onClick={() => fillQuickCreds('admin@examvault.local', 'Admin@ExamVault2024!')}
@@ -343,6 +343,14 @@ export const LoginPage: React.FC = () => {
                 title="moderator1@examvault.local / Examiner@2024!pass"
               >
                 Moderator
+              </button>
+              <button
+                type="button"
+                onClick={() => fillQuickCreds('custodian1@examvault.local', 'Examiner@2024!pass')}
+                className="px-1.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[11px] text-slate-700 hover:text-slate-900 border border-slate-200 text-center transition-colors font-medium truncate"
+                title="custodian1@examvault.local / Examiner@2024!pass"
+              >
+                Custodian
               </button>
               <button
                 type="button"

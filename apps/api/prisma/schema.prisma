@@ -19,6 +19,7 @@ enum Role {
   REVIEWER
   AUDITOR
   MODERATOR
+  CUSTODIAN
 }
 
 model User {
@@ -52,6 +53,15 @@ model User {
   corpusSources        CorpusSource[]
   notifications        Notification[]
   retiredVersions      QuestionVersion[]       @relation("RetiredBy")
+  createdBlueprints    ExamBlueprint[]         @relation("CreatedBlueprints")
+  proposedBlueprints   BlueprintVersion[]      @relation("ProposedBlueprints")
+  approvedBlueprints   BlueprintVersion[]      @relation("ApprovedBlueprints")
+  custodianMemberships CustodianGroupMember[]
+  proposedGenerations  GenerationRequest[]     @relation("ProposedGenerations")
+  generationApprovals  GenerationApproval[]
+  downloadTokens       DownloadToken[]
+  keyShares            KeyShareRecord[]
+  shareSubmissions     ShareSubmission[]
 
   @@map("users")
 }
@@ -132,6 +142,9 @@ model Exam {
 
   subjects Subject[]
   policies ApprovalPolicy[]
+  blueprints ExamBlueprint[]
+  generationRequests GenerationRequest[]
+  papers Paper[]
 
   @@map("exams")
 }
@@ -303,6 +316,7 @@ model QuestionVersion {
 
   // Difficulty Derivation & Conflict Resolution
   finalDifficulty            Float?             @map("final_difficulty")
+  finalTimeSeconds           Int?               @map("final_time_seconds")
   difficultySource           String?            @default("EXPERT_RATING") @map("difficulty_source") @db.VarChar(32)
   difficultyDerivationMethod String?            @map("difficulty_derivation_method") @db.VarChar(64)
   difficultySetById          String?            @map("difficulty_set_by_id") @db.Uuid
@@ -327,6 +341,7 @@ model QuestionVersion {
   reviews              Review[]
   reviewAssignments    ReviewAssignment[]
   approvals            Approval[]
+  exclusionGroups      QuestionExclusionGroup[]
 
   @@unique([questionId, versionNo])
   @@index([questionId])
@@ -700,4 +715,258 @@ model PlainAuditLog {
   @@index([eventType])
   @@map("plain_audit_logs")
 }
+
+// ── Step 4 & 5: Paper Generation, Blueprints, Custodians & Threshold Release ──
+
+model ExamBlueprint {
+  id          String   @id @default(uuid()) @db.Uuid
+  examId      String   @map("exam_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdById String   @map("created_by_id") @db.Uuid
+
+  exam        Exam               @relation(fields: [examId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation("CreatedBlueprints", fields: [createdById], references: [id])
+  versions    BlueprintVersion[]
+
+  @@index([examId])
+  @@map("exam_blueprints")
+}
+
+model BlueprintVersion {
+  id                String    @id @default(uuid()) @db.Uuid
+  blueprintId       String    @map("blueprint_id") @db.Uuid
+  versionNo         Int       @map("version_no")
+  content           Json      @db.JsonB
+  versionHash       String    @map("version_hash") @db.VarChar(64)
+  isApproved        Boolean   @default(false) @map("is_approved")
+  proposerId        String    @map("proposer_id") @db.Uuid
+  approverId        String?   @map("approver_id") @db.Uuid
+  approvalSignature String?   @map("approval_signature") @db.VarChar(512)
+  approvedAt        DateTime? @map("approved_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  blueprint          ExamBlueprint       @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  proposer           User                @relation("ProposedBlueprints", fields: [proposerId], references: [id])
+  approver           User?               @relation("ApprovedBlueprints", fields: [approverId], references: [id])
+  generationRequests GenerationRequest[]
+  papers             Paper[]
+
+  @@unique([blueprintId, versionNo])
+  @@index([versionHash])
+  @@map("blueprint_versions")
+}
+
+model CustodianGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  n           Int
+  k           Int
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  members            CustodianGroupMember[]
+  generationRequests GenerationRequest[]
+
+  @@map("custodian_groups")
+}
+
+model CustodianGroupMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  custodianId String   @map("custodian_id") @db.Uuid
+  publicKey   String   @map("public_key") @db.VarChar(128)
+  fingerprint String   @map("fingerprint") @db.VarChar(64)
+  enrolledAt  DateTime @default(now()) @map("enrolled_at")
+
+  group     CustodianGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  custodian User           @relation(fields: [custodianId], references: [id])
+
+  @@unique([groupId, custodianId])
+  @@index([custodianId])
+  @@map("custodian_group_members")
+}
+
+model GenerationRequest {
+  id                       String   @id @default(uuid()) @db.Uuid
+  examId                   String   @map("exam_id") @db.Uuid
+  blueprintVersionId       String   @map("blueprint_version_id") @db.Uuid
+  custodianGroupId         String   @map("custodian_group_id") @db.Uuid
+  proposerId               String   @map("proposer_id") @db.Uuid
+  status                   String   @default("REQUESTED") @db.VarChar(32)
+  setsCount                Int      @default(1) @map("sets_count")
+  exportProfile            String   @default("GENERIC_CSV") @map("export_profile") @db.VarChar(64)
+  generateNotBefore        DateTime @map("generate_not_before")
+  generateNotAfter         DateTime @map("generate_not_after")
+  releaseNotBefore         DateTime @map("release_not_before")
+  answerKeyNotBefore       DateTime @map("answer_key_not_before")
+  downloadRetentionMinutes Int      @default(720) @map("download_retention_minutes")
+  requestHash              String   @map("request_hash") @db.VarChar(64)
+  rejectionReason          String?  @map("rejection_reason") @db.Text
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  exam             Exam                 @relation(fields: [examId], references: [id], onDelete: Cascade)
+  blueprintVersion BlueprintVersion     @relation(fields: [blueprintVersionId], references: [id])
+  custodianGroup   CustodianGroup       @relation(fields: [custodianGroupId], references: [id])
+  proposer         User                 @relation("ProposedGenerations", fields: [proposerId], references: [id])
+  approvals        GenerationApproval[]
+  paper            Paper?
+
+  @@index([examId])
+  @@index([status])
+  @@map("generation_requests")
+}
+
+model GenerationApproval {
+  id          String   @id @default(uuid()) @db.Uuid
+  requestId   String   @map("request_id") @db.Uuid
+  approverId  String   @map("approver_id") @db.Uuid
+  requestHash String   @map("request_hash") @db.VarChar(64)
+  signature   String   @db.VarChar(512)
+  timestamp   DateTime @default(now())
+
+  request  GenerationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  approver User              @relation(fields: [approverId], references: [id])
+
+  @@unique([requestId, approverId])
+  @@index([requestId])
+  @@map("generation_approvals")
+}
+
+model Paper {
+  id                 String    @id @default(uuid()) @db.Uuid
+  examId             String    @map("exam_id") @db.Uuid
+  requestId          String    @unique @map("request_id") @db.Uuid
+  blueprintVersionId String    @map("blueprint_version_id") @db.Uuid
+  setsCount          Int       @default(1) @map("sets_count")
+  status             String    @default("GENERATING") @db.VarChar(32)
+  paperHash          String?   @map("paper_hash") @db.VarChar(64)
+  seedCommit         String?   @map("seed_commit") @db.VarChar(64)
+  revealedSeed       String?   @map("revealed_seed") @db.VarChar(128)
+  revealedSalt       String?   @map("revealed_salt") @db.VarChar(64)
+  publicManifest     Json?     @map("public_manifest") @db.JsonB
+  validationSummary  Json?     @map("validation_summary") @db.JsonB
+  failureReason      String?   @map("failure_reason") @db.Text
+  releasedAt         DateTime? @map("released_at")
+  wipedAt            DateTime? @map("wiped_at")
+  answerKeyReleasedAt DateTime? @map("answer_key_released_at")
+  closedAt           DateTime? @map("closed_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  exam             Exam                  @relation(fields: [examId], references: [id], onDelete: Cascade)
+  request          GenerationRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  blueprintVersion BlueprintVersion      @relation(fields: [blueprintVersionId], references: [id])
+  artifacts        PaperArtifact[]
+  keyShares        KeyShareRecord[]
+  shareSubmissions ShareSubmission[]
+  reservations     QuestionReservation[]
+  downloadTokens   DownloadToken[]
+
+  @@index([examId])
+  @@index([status])
+  @@map("papers")
+}
+
+model PaperArtifact {
+  id                 String   @id @default(uuid()) @db.Uuid
+  paperId            String   @map("paper_id") @db.Uuid
+  artifactType       String   @map("artifact_type") @db.VarChar(32)
+  ciphertextLocation String   @map("ciphertext_location") @db.VarChar(512)
+  ciphertextSha256   String   @map("ciphertext_sha256") @db.VarChar(64)
+  keyCommitment      String   @map("key_commitment") @db.VarChar(64)
+  nonce              Bytes    @map("nonce")
+  formatVersion      String   @default("v1") @map("format_version") @db.VarChar(16)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, artifactType])
+  @@map("paper_artifacts")
+}
+
+model KeyShareRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  paperId         String   @map("paper_id") @db.Uuid
+  artifactType    String   @map("artifact_type") @db.VarChar(32)
+  shareIndex      Int      @map("share_index")
+  custodianId     String   @map("custodian_id") @db.Uuid
+  sealedShare     String   @map("sealed_share") @db.Text
+  shareCommitment String   @map("share_commitment") @db.VarChar(64)
+  salt            String   @map("salt") @db.VarChar(64)
+  status          String   @default("SEALED") @db.VarChar(32)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  paper     Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  custodian User  @relation(fields: [custodianId], references: [id])
+
+  @@unique([paperId, artifactType, custodianId])
+  @@map("key_share_records")
+}
+
+model ShareSubmission {
+  id              String   @id @default(uuid()) @db.Uuid
+  paperId         String   @map("paper_id") @db.Uuid
+  custodianId     String   @map("custodian_id") @db.Uuid
+  artifactType    String   @map("artifact_type") @db.VarChar(32)
+  shareIndex      Int      @map("share_index")
+  submittedAt     DateTime @default(now()) @map("submitted_at")
+  status          String   @default("ACCEPTED") @db.VarChar(32)
+  rejectionReason String?  @map("rejection_reason") @db.VarChar(64)
+
+  paper     Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  custodian User  @relation(fields: [custodianId], references: [id])
+
+  @@index([paperId, artifactType])
+  @@map("share_submissions")
+}
+
+model QuestionReservation {
+  id                String   @id @default(uuid()) @db.Uuid
+  paperId           String   @map("paper_id") @db.Uuid
+  reservationHandle String   @map("reservation_handle") @db.VarChar(64)
+  reservedAt        DateTime @default(now()) @map("reserved_at")
+
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, reservationHandle])
+  @@index([reservationHandle])
+  @@map("question_reservations")
+}
+
+model DownloadToken {
+  id            String   @id @default(uuid()) @db.Uuid
+  token         String   @unique @db.VarChar(64)
+  paperId       String   @map("paper_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  fileType      String   @map("file_type") @db.VarChar(32)
+  remainingUses Int      @default(5) @map("remaining_uses")
+  expiresAt     DateTime @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@index([paperId, userId])
+  @@map("download_tokens")
+}
+
+model QuestionExclusionGroup {
+  id                String   @id @default(uuid()) @db.Uuid
+  questionVersionId String   @unique @map("question_version_id") @db.Uuid
+  groupId           String   @map("group_id") @db.VarChar(64)
+  source            String   @map("source") @db.VarChar(32)
+  templateFamilyId  String?  @map("template_family_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@map("question_exclusion_groups")
+}
+
 

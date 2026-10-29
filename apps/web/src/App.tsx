@@ -12,6 +12,8 @@ import { StatsPage } from './pages/StatsPage';
 import { ReviewerWorkspace } from './pages/ReviewerWorkspace';
 import { ModeratorConsole } from './pages/ModeratorConsole';
 import { AdminPoliciesPage } from './pages/AdminPoliciesPage';
+import { AdminGenerationPage } from './pages/AdminGenerationPage';
+import { CustodianPortalPage } from './pages/CustodianPortalPage';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { AuthorFeedbackModal } from './components/AuthorFeedbackModal';
 import { Lock } from 'lucide-react';
@@ -28,7 +30,9 @@ const queryClient = new QueryClient({
 const getDefaultTabForRole = (role?: string): string => {
   switch (role) {
     case 'ADMIN':
-      return 'admin-users';
+      return 'admin-generation';
+    case 'CUSTODIAN':
+      return 'custodian-portal';
     case 'AUDITOR':
       return 'audit';
     case 'REVIEWER':
@@ -45,7 +49,17 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
   if (tab === 'stats') return true;
   switch (role) {
     case 'ADMIN':
-      return ['admin-users', 'admin-syllabus', 'admin-workflow', 'admin-policies', 'audit', 'stats'].includes(tab);
+      return [
+        'admin-generation',
+        'admin-users',
+        'admin-syllabus',
+        'admin-workflow',
+        'admin-policies',
+        'audit',
+        'stats',
+      ].includes(tab);
+    case 'CUSTODIAN':
+      return ['custodian-portal', 'stats'].includes(tab);
     case 'AUDITOR':
       return ['audit', 'stats'].includes(tab);
     case 'REVIEWER':
@@ -166,7 +180,11 @@ const MainLayout: React.FC = () => {
             }}
           />
         )}
+        {resolvedTab === 'admin-generation' && <AdminGenerationPage />}
         {resolvedTab === 'admin-policies' && <AdminPoliciesPage />}
+
+        {/* Custodian Portal Tab */}
+        {resolvedTab === 'custodian-portal' && <CustodianPortalPage />}
 
         {/* Auditor Tab */}
         {resolvedTab === 'audit' && <AuditorPage />}

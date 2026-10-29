@@ -17,8 +17,9 @@ import { SIGNING_PROVIDER } from './signing-provider.interface';
       provide: SIGNING_PROVIDER,
       useClass: ServerSigningProvider,
     },
+    ServerSigningProvider,
     CryptoService,
   ],
-  exports: [CryptoService, KEY_PROVIDER, SIGNING_PROVIDER],
+  exports: [CryptoService, KEY_PROVIDER, SIGNING_PROVIDER, ServerSigningProvider],
 })
 export class CryptoModule {}

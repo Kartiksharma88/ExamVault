@@ -1,0 +1,4 @@
+﻿"paper_id","set_code","question_no","item_id","question_type","correct_answer","marks","negative_marks","solution"
+"00000000-0000-0000-0000-000000000099","D","1","synth-item-003","MCQ_SINGLE","1","4","1","Derivative is $\cos(x) - \sin(x)$. At $x = 0$, $\cos(0) - \sin(0) = 1 - 0 = 1$."
+"00000000-0000-0000-0000-000000000099","D","2","synth-item-002","MCQ_SINGLE","1","4","1","Molarity = moles / volume = 0.5 / 1.0 = 0.5 M."
+"00000000-0000-0000-0000-000000000099","D","3","synth-item-001","MCQ_SINGLE","1","4","1","Normal force $N = mg \cos(30^\circ) = 2 \times 9.8 \times 0.866 \approx 17.0\text{ N}$."

@@ -2,13 +2,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ExamVaultVerifier, AuditDataset } from './verifier';
+import { PaperVerifier, PaperVerificationInput } from './paper-verifier';
 
 function parseArgs(args: string[]): {
   exportPath?: string;
+  paperPath?: string;
   isJson: boolean;
   help: boolean;
 } {
   let exportPath: string | undefined;
+  let paperPath: string | undefined;
   let isJson = false;
   let help = false;
 
@@ -16,6 +19,8 @@ function parseArgs(args: string[]): {
     const arg = args[i];
     if (arg === '--export' || arg === '-e') {
       exportPath = args[++i];
+    } else if (arg === '--paper' || arg === '-p') {
+      paperPath = args[++i];
     } else if (arg === '--json' || arg === '-j') {
       isJson = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -23,7 +28,7 @@ function parseArgs(args: string[]): {
     }
   }
 
-  return { exportPath, isJson, help };
+  return { exportPath, paperPath, isJson, help };
 }
 
 function printUsage(): void {
@@ -32,9 +37,11 @@ ExamVault Independent Verifier CLI (examvault-verify)
 ======================================================
 Usage:
   examvault-verify --export <path-to-json-export> [options]
+  examvault-verify --paper <path-to-paper-json> [options]
 
 Options:
   -e, --export <path>   Path to exported JSON audit dataset (offline mode)
+  -p, --paper <path>    Path to exported JSON paper bundle (paper verification mode)
   -j, --json            Output machine-readable JSON report
   -h, --help            Show this help message
 
@@ -45,20 +52,61 @@ Exit Codes:
 }
 
 async function main(): Promise<void> {
-  const { exportPath, isJson, help } = parseArgs(process.argv.slice(2));
+  const { exportPath, paperPath, isJson, help } = parseArgs(process.argv.slice(2));
 
   if (help) {
     printUsage();
     process.exit(0);
   }
 
-  if (!exportPath) {
-    console.error('Error: Missing required option --export <path>');
+  if (!exportPath && !paperPath) {
+    console.error('Error: Missing required option --export <path> or --paper <path>');
     printUsage();
     process.exit(1);
   }
 
-  const resolvedPath = path.resolve(process.cwd(), exportPath);
+  if (paperPath) {
+    const resolvedPath = path.resolve(process.cwd(), paperPath);
+    if (!fs.existsSync(resolvedPath)) {
+      console.error(`Error: File not found: ${resolvedPath}`);
+      process.exit(1);
+    }
+
+    let input: PaperVerificationInput;
+    try {
+      input = JSON.parse(fs.readFileSync(resolvedPath, 'utf-8'));
+    } catch (err: any) {
+      console.error(`Error reading paper dataset: ${err.message}`);
+      process.exit(1);
+    }
+
+    const verifier = new PaperVerifier();
+    const report = verifier.verify(input);
+
+    if (isJson) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log('\n======================================================');
+      console.log('       ExamVault Paper Cryptographic Verification Report');
+      console.log('======================================================');
+      console.log(`Paper ID   : ${report.paperId}`);
+      console.log(`Checked At : ${report.checkedAt}`);
+      console.log(`Status     : ${report.overallValid ? '✅ VERIFIED CLEAN' : '❌ VERIFICATION FAILED'}\n`);
+
+      console.log('Integrity & Cryptographic Checks:');
+      console.log('------------------------------------------------------');
+      for (const check of report.checks) {
+        const badge = check.passed ? '[PASS]' : '[FAIL]';
+        console.log(`${badge} ${check.checkName.padEnd(32)}`);
+        console.log(`       ${check.message}`);
+      }
+      console.log('======================================================\n');
+    }
+
+    process.exit(report.overallValid ? 0 : 1);
+  }
+
+  const resolvedPath = path.resolve(process.cwd(), exportPath!);
   if (!fs.existsSync(resolvedPath)) {
     console.error(`Error: File not found: ${resolvedPath}`);
     process.exit(1);

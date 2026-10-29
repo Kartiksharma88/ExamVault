@@ -87,4 +87,9 @@ export class LocalKeyProvider implements KeyProvider {
     // Derive a dedicated 256-bit pseudonymization key from master key using HMAC-SHA-256
     return crypto.createHmac('sha256', this.masterKey).update('examvault-pseudonym-salt-v1').digest();
   }
+
+  getReservationKey(): Buffer {
+    // Derive a dedicated 256-bit key for reservation handles from master key using HMAC-SHA-256
+    return crypto.createHmac('sha256', this.masterKey).update('examvault-reservation-salt-v1').digest();
+  }
 }

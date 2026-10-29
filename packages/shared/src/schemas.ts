@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // ── Enums ──────────────────────────────────────────────────────────
-export const UserRole = z.enum(['ADMIN', 'EXAMINER', 'REVIEWER', 'AUDITOR', 'MODERATOR']);
+export const UserRole = z.enum(['ADMIN', 'EXAMINER', 'REVIEWER', 'AUDITOR', 'MODERATOR', 'CUSTODIAN']);
 export type UserRole = z.infer<typeof UserRole>;
 
 export const QuestionType = z.enum(['MCQ_SINGLE', 'MCQ_MULTI', 'INTEGER']);

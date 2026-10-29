@@ -49,6 +49,9 @@ describe('Security & Authorization Controls (Acceptance Criteria)', () => {
       create: jest.fn(),
       count: jest.fn(),
     },
+    userSubjectExpertise: {
+      findMany: jest.fn().mockResolvedValue([{ subjectId: 'subject-uuid-1', subject: { id: 'subject-uuid-1', name: 'Physics' } }]),
+    },
     $queryRaw: jest.fn(),
   };
 

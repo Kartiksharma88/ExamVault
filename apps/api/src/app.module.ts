@@ -18,6 +18,10 @@ import { ModerationModule } from './moderation/moderation.module';
 import { CorpusModule } from './corpus/corpus.module';
 import { ConflictsModule } from './conflicts/conflicts.module';
 import { InternalModule } from './internal/internal.module';
+import { BlueprintsModule } from './blueprints/blueprints.module';
+import { CustodiansModule } from './custodians/custodians.module';
+import { GenerationModule } from './generation/generation.module';
+import { ReleaseModule } from './release/release.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -49,6 +53,10 @@ import { HealthController } from './health.controller';
     CorpusModule,
     ConflictsModule,
     InternalModule,
+    BlueprintsModule,
+    CustodiansModule,
+    GenerationModule,
+    ReleaseModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -1,0 +1,3 @@
+strategy,topic_compliance_pct,mad_diff,var_diff,mean_overlap,max_overlap,overlap_violations,gini,entropy,p50_ms,p95_ms,max_ms
+RANDOM,5.00,3.65,21.94,0.17,3,0,0.3650,10.18,0.42,1.27,1.60
+CPSAT,100.00,0.01,0.00,0.41,3,0,0.3762,9.97,1485.18,1848.88,2801.37

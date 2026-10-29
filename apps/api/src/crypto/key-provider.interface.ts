@@ -32,6 +32,9 @@ export interface KeyProvider {
 
   /** Secret key for actor pseudonymization (HMAC-SHA-256) */
   getPseudonymKey(): Buffer;
+
+  /** Secret key for unreleased question reservation handles (HMAC-SHA-256) */
+  getReservationKey(): Buffer;
 }
 
 export const KEY_PROVIDER = 'KEY_PROVIDER';

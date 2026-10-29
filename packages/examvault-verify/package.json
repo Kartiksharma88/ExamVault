@@ -14,7 +14,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@examvault/audit-canonical": "workspace:*"
+    "@examvault/audit-canonical": "workspace:*",
+    "@examvault/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

@@ -14,6 +14,7 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
+import { generateCustodianKeyPair } from '@examvault/shared';
 
 function loadEnv() {
   const envPaths = [
@@ -289,7 +290,34 @@ async function main() {
       mustSetupMfa: true,
     },
   });
-  console.log(`  ✅ Admins: ${admin.email}, ${admin2.email}`);
+  const admin3 = await prisma.user.upsert({
+    where: { email: 'admin3@examvault.local' },
+    update: {},
+    create: {
+      email: 'admin3@examvault.local',
+      name: 'Tertiary Administrator (Audit Admin)',
+      passwordHash: adminHash,
+      role: 'ADMIN',
+      mustSetupMfa: true,
+    },
+  });
+
+  // Generate wrapped signing keys for all three admins for two-admin approvals
+  for (const adm of [admin, admin2, admin3]) {
+    const sigKey = generateWrappedSigningKey(masterKey);
+    await prisma.userSigningKey.upsert({
+      where: { userId: adm.id },
+      update: {},
+      create: {
+        userId: adm.id,
+        publicKey: sigKey.publicKeyB64,
+        wrappedPrivateKey: sigKey.wrappedKey,
+        keyId,
+      },
+    });
+  }
+
+  console.log(`  ✅ Admins: ${admin.email}, ${admin2.email}, ${admin3.email}`);
 
   // ── 2. Create sample users ──
   const examinerHash = await argon2.hash('Examiner@2024!pass', {
@@ -451,7 +479,49 @@ async function main() {
     },
   });
 
-  console.log(`  ✅ Users: 2 Admins, 3 Examiners, 2 Moderators, 6 Reviewers, 1 Auditor`);
+  // ── Step 4 & 5: 7 Custodians with enrolled X25519 public keys ──
+  const custodians: any[] = [];
+  const custodianKeys: any[] = [];
+  for (let i = 1; i <= 7; i++) {
+    const cUser = await prisma.user.upsert({
+      where: { email: `custodian${i}@examvault.local` },
+      update: {},
+      create: {
+        email: `custodian${i}@examvault.local`,
+        name: `Exam Custodian ${i}`,
+        passwordHash: examinerHash,
+        role: 'CUSTODIAN',
+        mustSetupMfa: true,
+      },
+    });
+    custodians.push(cUser);
+    const kp = await generateCustodianKeyPair();
+    custodianKeys.push(kp);
+  }
+
+  // Default approved custodian group (k=3, n=5)
+  const defaultGroup = await prisma.custodianGroup.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000010' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: 'Primary Examination Custodian Board',
+      n: 5,
+      k: 3,
+      isActive: true,
+      members: {
+        create: custodians.slice(0, 5).map((c, idx) => ({
+          custodianId: c.id,
+          publicKey: custodianKeys[idx].publicKeyHex,
+          fingerprint: custodianKeys[idx].fingerprint,
+          enrolledAt: new Date(),
+        })),
+      },
+    },
+  });
+
+  console.log(`  ✅ Users: 3 Admins, 3 Examiners, 2 Moderators, 6 Reviewers, 1 Auditor, 7 Custodians`);
+  console.log(`  ✅ Custodian Group: ${defaultGroup.name} (k=3, n=5)`);
 
   // ── 3. Create Exam and Syllabus ──
   const exam = await prisma.exam.upsert({
@@ -795,12 +865,17 @@ async function main() {
       status = mod === 0 ? 'DRAFT' : mod === 1 ? 'SUBMITTED' : mod === 2 ? 'READY_FOR_REVIEW' : mod === 3 ? 'UNDER_REVIEW' : 'APPROVED';
     }
 
+    const finalDiff = Math.min(100, Math.max(1, Math.round(q.difficulty * 100)));
+    const finalTime = Math.round(q.difficulty * 120 + 60);
+
     const version = await prisma.questionVersion.create({
       data: {
         questionId: question.id,
         versionNo: 1,
         status: status as any,
         authorId,
+        finalDifficulty: status === 'APPROVED' ? finalDiff : null,
+        finalTimeSeconds: status === 'APPROVED' ? finalTime : null,
         encryptedContent: contentEnvelope.ciphertext,
         contentNonce: contentEnvelope.nonce,
         contentTag: contentEnvelope.tag,
@@ -1044,6 +1119,128 @@ async function main() {
     }
   }
 
+  // ── Step 4: Approved Blueprint for JEE Advanced 2025 ──
+  const blueprintData = {
+    examId: exam.id,
+    name: 'JEE Advanced Standard Blueprint',
+    durationSeconds: 10800,
+    totalQuestions: 6,
+    totalMarks: 24,
+    sections: [
+      {
+        code: 'PHY',
+        name: 'Physics',
+        subjectId: phySubject.id,
+        allowedQuestionTypes: ['MCQ_SINGLE'],
+        count: 2,
+        totalMarks: 8,
+        negativeMarksAllowed: true,
+        topicQuotas: [
+          { topicId: phyTopicRecords['Mechanics'], min: 0, max: 2 },
+        ],
+        difficultyBins: {
+          EASY: { min: 0, max: 2 },
+          MEDIUM: { min: 0, max: 2 },
+          HARD: { min: 0, max: 2 },
+        },
+        allowedMarksValues: [4],
+      },
+      {
+        code: 'CHE',
+        name: 'Chemistry',
+        subjectId: cheSubject.id,
+        allowedQuestionTypes: ['MCQ_SINGLE'],
+        count: 2,
+        totalMarks: 8,
+        negativeMarksAllowed: true,
+        topicQuotas: [
+          { topicId: cheTopicRecords['Stoichiometry'], min: 0, max: 2 },
+        ],
+        difficultyBins: {
+          EASY: { min: 0, max: 2 },
+          MEDIUM: { min: 0, max: 2 },
+          HARD: { min: 0, max: 2 },
+        },
+        allowedMarksValues: [4],
+      },
+      {
+        code: 'MAT',
+        name: 'Mathematics',
+        subjectId: matSubject.id,
+        allowedQuestionTypes: ['MCQ_SINGLE'],
+        count: 2,
+        totalMarks: 8,
+        negativeMarksAllowed: true,
+        topicQuotas: [
+          { topicId: matTopicRecords['Differential Calculus'], min: 0, max: 2 },
+        ],
+        difficultyBins: {
+          EASY: { min: 0, max: 2 },
+          MEDIUM: { min: 0, max: 2 },
+          HARD: { min: 0, max: 2 },
+        },
+        allowedMarksValues: [4],
+      },
+    ],
+    difficulty: {
+      targetMean: 50,
+      meanTolerance: 25,
+    },
+    time: {
+      minRatio: 0.05,
+      maxRatio: 1.0,
+    },
+    exposure: {
+      maxTotalUses: 5,
+      cooldownPapers: 1,
+      overlap: {
+        recentPapersM: 3,
+        maxSharedQuestionsPerPaper: 2,
+      },
+    },
+    sets: {
+      count: 2,
+    },
+    solver: {
+      timeLimitSeconds: 30,
+      requireOptimal: false,
+      minPoolMultiplier: 1.5,
+    },
+    csv: {
+      bom: true,
+      formulaGuard: true,
+      profileDefault: 'OFFLINE_QUESTION_PAPER',
+    },
+  };
+
+  const canonicalBp = JSON.stringify(blueprintData);
+  const bpVersionHash = crypto.createHash('sha256').update(canonicalBp).digest('hex');
+
+  const seededBlueprint = await prisma.examBlueprint.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000020' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000020',
+      examId: exam.id,
+      name: 'JEE Advanced Standard Blueprint',
+      description: 'Standard 6-question blueprint across Physics, Chemistry, and Mathematics',
+      createdById: admin.id,
+      versions: {
+        create: {
+          versionNo: 1,
+          content: blueprintData as any,
+          versionHash: bpVersionHash,
+          isApproved: true,
+          proposerId: admin.id,
+          approverId: admin2.id,
+          approvedAt: new Date(),
+          approvalSignature: 'SIG_APPROVED_SEED_BLUEPRINT_V1',
+        },
+      },
+    },
+  });
+  console.log(`  ✅ Exam Blueprint: ${seededBlueprint.name} (Approved Version 1)`);
+
   // Audit log for seed
   await auditLog({
     actorId: admin.id,
@@ -1060,12 +1257,14 @@ async function main() {
   console.log('Credentials:');
   console.log(`  Admin 1 (Proposer):   ${adminEmail} / ${adminPassword}`);
   console.log(`  Admin 2 (Approver):   admin2@examvault.local / ${adminPassword}`);
+  console.log(`  Admin 3 (Audit Admin): admin3@examvault.local / ${adminPassword}`);
   console.log(`  Examiner 1:           examiner1@examvault.local / Examiner@2024!pass`);
   console.log(`  Examiner 2:           examiner2@examvault.local / Examiner@2024!pass`);
   console.log(`  Examiner 3:           examiner3@examvault.local / Examiner@2024!pass`);
   console.log(`  Moderator 1 (Lead):   moderator1@examvault.local / Examiner@2024!pass`);
   console.log(`  Moderator 2:          moderator2@examvault.local / Examiner@2024!pass`);
   console.log(`  Reviewers 1-6:        reviewer1@examvault.local .. reviewer6@examvault.local / Examiner@2024!pass`);
+  console.log(`  Custodians 1-7:       custodian1@examvault.local .. custodian7@examvault.local / Examiner@2024!pass`);
   console.log(`  Auditor:              auditor@examvault.local / Examiner@2024!pass`);
 }
 

@@ -48,5 +48,13 @@ blockchain/organizations/ordererOrganizations/
 blockchain/organizations/fabric-ca/
 blockchain/channel-artifacts/
 *.block
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
 *.tx
 

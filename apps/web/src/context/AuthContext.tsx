@@ -5,7 +5,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'EXAMINER' | 'REVIEWER' | 'AUDITOR' | 'MODERATOR';
+  role: 'ADMIN' | 'EXAMINER' | 'REVIEWER' | 'AUDITOR' | 'MODERATOR' | 'CUSTODIAN';
   mfaEnabled: boolean;
   createdAt: string;
 }

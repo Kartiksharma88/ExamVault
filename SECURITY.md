@@ -148,3 +148,62 @@ It is critical to be transparent about what cryptographic audit trails can and c
 | **Two-Org Collusion (Fabric)** | **CANNOT DETECT** | If 2 of 3 orgs collude, 2-of-3 endorsement quorum is satisfied. Consensus cannot defeat majority collusion. |
 | **Content Exfiltration / Screen Capture** | **CANNOT PREVENT** | Audit logs record accesses *ex-post*. A log can never prevent an authorized examiner from taking a photo of their monitor. |
 | **Compromised Legitimate Approvers** | **CANNOT PREVENT** | If the required number of legitimate approvers collude to approve a flawed question, signatures are valid. Technical audit trails detect procedural tampering, not malicious human consensus. |
+
+---
+
+## 6. Step 4 & 5: Paper Generation, Threshold Release & Delivery Security
+
+Step 4 and Step 5 protect examination papers during on-the-fly automated generation, cryptographic sealing, decentralized threshold key custody, and time-gated delivery.
+
+### 6.1 Two-Admin Approval & Invariant Integrity
+- **Dual-Control Invariant**: A paper generation request cannot be initiated or approved by a single administrator. The proposer and approver must be strictly different users (`proposerId !== approverId`).
+- **Cryptographic Binding**: The second administrator's signed approval covers a canonical RFC 8785 JSON representation binding:
+  - Canonical request hash
+  - Blueprint version hash
+  - Custodian group snapshot hash
+  - Time windows (`generateNotBefore`, `generateNotAfter`, `releaseNotBefore`, `answerKeyNotBefore`)
+  - Export profile and retention limits
+- **Step-Up MFA**: The second administrator must provide a fresh TOTP MFA token at the moment of approval signing.
+
+### 6.2 Internal-Only Paper Selector Model
+- **Metadata-Only Processing**: The Python `paper-selector` service (Google OR-Tools CP-SAT) receives **zero question content, stems, options, or answers**. It operates strictly on integers:
+  - Question version ID, subject ID, topic ID
+  - Marks, difficulty integer (0..100), time integer (seconds)
+  - Exclusion group ID, usage counts, reservation handles
+- **Network Isolation**: The `paper-selector` container operates exclusively on an internal Docker bridge network (`internal: true`) with no external routing or internet gateway.
+- **Independent Validation**: An independent TypeScript validator (`validatePaper()`) rerun on the backend verifies that the selected paper conforms strictly to the blueprint prior to sealing. The validator shares zero code with the Python solver.
+
+### 6.3 Threshold Cryptographic Custody (Shamir Secret Sharing)
+- **Key Hierarchy**:
+  - For each paper generated, the server generates two ephemeral 256-bit symmetric keys: $K_{\text{paper}}$ (for the paper files) and $K_{\text{key}}$ (for the answer key).
+  - Each key is split into $n$ Shamir shares with threshold $k$ over $\text{GF}(2^8)$ using `secrets.js-grempe`.
+- **Per-Share Commitments**:
+  $$\text{Commitment}_i = \text{SHA-256}(\text{Share}_i \mathbin{\Vert} \text{Salt}_i)$$
+  Recorded in the append-only `key_share_records` table to prevent rogue share replacement or forgery.
+- **Anonymous Sealed Box Delivery**:
+  - Each share is encrypted directly to the custodian's enrolled X25519 public key using Libsodium anonymous sealed box (`crypto_box_seal`).
+  - Only the assigned custodian possessing the corresponding X25519 private key in their browser can decrypt their share.
+- **Immediate Plaintext Key Zeroization**:
+  - Plaintext symmetric keys ($K_{\text{paper}}$, $K_{\text{key}}$) are immediately zeroized in memory via `Buffer.fill(0)` after envelope encryption and share splitting.
+
+### 6.4 Time-Gated Threshold Release & Retention Wiping
+- **Strict Time-Gating**: Share submissions before `release_not_before` (for paper) or `answerKeyNotBefore` (for answer key) are rejected with HTTP 409 Conflict. Rejected submissions are never stored.
+- **Threshold Reconstruction**: Plaintext symmetric keys are reconstructed only when $k$ distinct, verified custodian shares are received after the time-gate opens.
+- **In-Memory Retention & Automatic Wiping**:
+  - Decrypted papers exist in a volatile in-memory/tmpfs cache only during the retention window (`downloadRetentionMinutes`, default 720 minutes).
+  - Once retention expires, the paper status transitions to `WIPED`, volatile cache buffers are purged, and the files cannot be downloaded again.
+
+### 6.5 Known Exposure: Authorized Administrator Download Exception
+> [!WARNING] Known Administrative Exposure
+> Under the ExamVault security architecture, administrators generally have zero access to question content or answers. However, by business necessity for physical print distribution and offline delivery, **the two administrators who proposed and approved the generation request are granted permission to download the released paper files** (CSV and image attachments) only under the following strict conditions:
+> 1. Paper status is currently `RELEASED`.
+> 2. Current timestamp is within the active retention window (`releaseNotBefore` to `expiresAt`).
+> 3. Single-use download tokens with a strict remaining uses decrement counter.
+> 
+> **Residual Exposure**: During this active release window, an authorized administrator who downloads the plaintext paper CSV has physical access to the examination content and could potentially exfiltrate, photograph, or copy it.
+> 
+> **Mitigations**:
+> - Generation and release windows are restricted to immediate pre-examination timeframes.
+> - Every download event is permanently recorded in both audit sinks (Hyperledger Fabric and the signed hash chain) logging the downloading actor ID, timestamp, IP address, and SHA-256 hash of the downloaded file.
+> - Once the retention period elapses, the plaintext is destroyed and wiped from server memory.
+
