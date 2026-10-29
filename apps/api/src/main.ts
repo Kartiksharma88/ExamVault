@@ -97,7 +97,7 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-// Standalone server for local development and non-serverless runtime
+// Listen on PORT (for both local development and Vercel Fluid Compute)
 async function bootstrap() {
   const server = await bootstrapServer();
   const port = Number(process.env.PORT || process.env.API_PORT || 3001);
@@ -111,6 +111,4 @@ async function bootstrap() {
   }
 }
 
-if (!process.env.VERCEL) {
-  bootstrap();
-}
+bootstrap();
