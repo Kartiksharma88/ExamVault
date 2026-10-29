@@ -99,16 +99,18 @@ export default async function handler(req: Request, res: Response) {
 
 // Listen on PORT (for both local development and Vercel Fluid Compute)
 async function bootstrap() {
-  const server = await bootstrapServer();
-  const port = Number(process.env.PORT || process.env.API_PORT || 3001);
   try {
+    const server = await bootstrapServer();
+    const port = Number(process.env.PORT || process.env.API_PORT || 3001);
     server.listen(port, '0.0.0.0', () => {
       console.log(`ExamVault API running on port ${port}`);
       console.log(`Swagger docs: http://localhost:${port}/api/docs`);
     });
-  } catch (err) {
-    console.warn('Server listen warning:', err);
+  } catch (err: any) {
+    console.error('Bootstrap failure:', err);
   }
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Fatal bootstrap error:', err);
+});

@@ -17,8 +17,8 @@ import { KeyProvider } from './key-provider.interface';
 export class LocalKeyProvider implements KeyProvider {
   private readonly masterKey: Buffer;
   private readonly keyId: string;
-  private readonly signingKey: crypto.KeyObject;
-  private readonly verifyKey: crypto.KeyObject;
+  private signingKey!: crypto.KeyObject;
+  private verifyKey!: crypto.KeyObject;
 
   constructor(private configService: ConfigService) {
     // Load master key
@@ -33,21 +33,28 @@ export class LocalKeyProvider implements KeyProvider {
 
     // Load or generate Ed25519 signing keys
     const privateKeyB64 = this.configService.get<string>('AUDIT_SIGNING_PRIVATE_KEY');
+    let loadedSigningKey: crypto.KeyObject | null = null;
     if (privateKeyB64 && privateKeyB64 !== 'replace-with-base64-ed25519-private-key') {
-      const privateKeyDer = Buffer.from(privateKeyB64, 'base64');
-      this.signingKey = crypto.createPrivateKey({
-        key: privateKeyDer,
-        format: 'der',
-        type: 'pkcs8',
-      });
-      this.verifyKey = crypto.createPublicKey(this.signingKey);
-    } else {
-      // Generate ephemeral keys for development
+      try {
+        const privateKeyDer = Buffer.from(privateKeyB64, 'base64');
+        loadedSigningKey = crypto.createPrivateKey({
+          key: privateKeyDer,
+          format: 'der',
+          type: 'pkcs8',
+        });
+        this.verifyKey = crypto.createPublicKey(loadedSigningKey);
+        this.signingKey = loadedSigningKey;
+      } catch (err: any) {
+        console.warn('[LocalKeyProvider] Failed to load AUDIT_SIGNING_PRIVATE_KEY, using ephemeral:', err.message);
+      }
+    }
+    if (!loadedSigningKey) {
+      // Generate ephemeral keys for development or fallback
       const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
       this.signingKey = privateKey;
       this.verifyKey = publicKey;
       console.warn(
-        '[LocalKeyProvider] Generated ephemeral Ed25519 keys. Set AUDIT_SIGNING_PRIVATE_KEY in production.',
+        '[LocalKeyProvider] Generated ephemeral Ed25519 keys.',
       );
     }
   }
