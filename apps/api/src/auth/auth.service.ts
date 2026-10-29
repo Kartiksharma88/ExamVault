@@ -426,6 +426,18 @@ export class AuthService {
         role: true,
         mfaEnabled: true,
         mustSetupMfa: true,
+        userSubjectExpertise: {
+          select: {
+            subjectId: true,
+            subject: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },

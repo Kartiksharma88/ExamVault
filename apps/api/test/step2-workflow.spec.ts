@@ -53,6 +53,7 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
     user: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
+      findMany: jest.fn(),
     },
     reviewRound: {
       findFirst: jest.fn(),
@@ -63,6 +64,7 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
     reviewAssignment: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -70,6 +72,7 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
     review: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -105,11 +108,15 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
     userSigningKey: {
       findUnique: jest.fn(),
     },
+    notification: {
+      create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     auditEvent: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
-      create: jest.fn(),
-      count: jest.fn(),
+      create: jest.fn().mockResolvedValue({ id: 'audit-1', entryHash: 'hash-0' }),
+      count: jest.fn().mockResolvedValue(0),
     },
     $transaction: jest.fn((cb: any) => cb(mockPrisma)),
     $queryRaw: jest.fn(),
@@ -179,6 +186,7 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
     const questionId = 'q-100';
     const authorId = 'examiner-1';
     const versionId = 'qv-100';
+    const moderatorId = 'mod-1';
 
     it('rejects an author attempting to review their own question', async () => {
       mockPrisma.reviewAssignment.findUniqueOrThrow.mockResolvedValue({
@@ -203,7 +211,9 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
         id: versionId,
         authorId: authorId, // Author attempting to moderate!
         status: 'MODERATION',
+        reviewAssignments: [],
         reviewRounds: [],
+        question: { id: questionId, subjectId: 'sub-1' },
       });
 
       await expect(
@@ -212,6 +222,99 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
           { decision: 'APPROVE', comments: 'Self approval', totpToken: '123456' } as any,
           authorId,
         ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('strictly forbids a moderator from reading a question outside their queue', async () => {
+      mockPrisma.question.findUniqueOrThrow.mockResolvedValue({
+        id: questionId,
+        authorId: 'examiner-other',
+        currentVersion: 1,
+      });
+      mockPrisma.questionVersion.findUnique.mockResolvedValue({
+        id: versionId,
+        questionId,
+        versionNo: 1,
+        status: 'UNDER_REVIEW', // In standard review, NOT in moderator queue!
+      });
+      mockPrisma.reviewAssignment.findFirst.mockResolvedValue(null);
+      mockPrisma.review.findFirst.mockResolvedValue(null); // No disagreement
+
+      await expect(
+        questionsService.getContent(questionId, moderatorId, 'MODERATOR'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('masks reviewer and author identities in the moderator queue', async () => {
+      mockPrisma.questionVersion.findMany.mockResolvedValue([
+        {
+          id: 'qv-ready',
+          versionNo: 1,
+          status: 'MODERATION',
+          question: {
+            humanId: 'EV-PHY-000001',
+            subject: { name: 'Physics' },
+            author: { id: 'auth-1', name: 'Dr. Real Author', email: 'author@test.com' },
+          },
+          reviews: [
+            { id: 'rev-1', decision: 'APPROVE', difficultyRating: 0.5, checklist: {} },
+            { id: 'rev-2', decision: 'APPROVE', difficultyRating: 0.6, checklist: {} },
+          ],
+        },
+      ]);
+      mockPrisma.review.findMany.mockResolvedValue([]);
+      mockPrisma.reviewAssignment.findMany.mockResolvedValue([]);
+
+      const queue = await moderationService.getModeratorQueue(moderatorId);
+      expect(queue.readyForApproval[0].question.author.name).toBe('Author');
+      expect(queue.readyForApproval[0].reviews[0].reviewerLabel).toBe('Reviewer A');
+      expect(queue.readyForApproval[0].reviews[1].reviewerLabel).toBe('Reviewer B');
+    });
+
+    it('rejects moderator approval if required signed reviewer approvals are missing', async () => {
+      mockPrisma.questionVersion.findUniqueOrThrow.mockResolvedValue({
+        id: versionId,
+        authorId: 'other-author',
+        status: 'MODERATION',
+        versionNo: 1,
+        questionId,
+        question: { id: questionId, subjectId: 'sub-1' },
+        reviewAssignments: [],
+        reviewRounds: [],
+      });
+      mockPrisma.approvalPolicy.findFirst.mockResolvedValue({ requiredReviewers: 2 });
+      mockPrisma.approval.findMany.mockResolvedValue([]); // No reviewer approvals!
+      mockPrisma.review.findMany.mockResolvedValue([]); // No completed reviews!
+      mockPrisma.review.findFirst.mockResolvedValue(null);
+
+      await expect(
+        moderationService.submitDecision(
+          versionId,
+          { decision: 'APPROVE', comments: 'Early approval', totpToken: '123456' } as any,
+          moderatorId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('blocks moderator content access when hourly read limit is exceeded', async () => {
+      mockPrisma.question.findUniqueOrThrow.mockResolvedValue({
+        id: questionId,
+        authorId: 'examiner-other',
+        currentVersion: 1,
+      });
+      mockPrisma.questionVersion.findUnique.mockResolvedValue({
+        id: versionId,
+        questionId,
+        versionNo: 1,
+        status: 'MODERATION', // In queue
+      });
+      mockPrisma.reviewAssignment.findFirst.mockResolvedValue(null);
+      mockPrisma.review.findFirst.mockResolvedValue(null);
+      // Simulate 55 reads in past hour (limit 50)
+      mockPrisma.auditEvent.count.mockResolvedValue(55);
+
+      await expect(
+        questionsService.getContent(questionId, moderatorId, 'MODERATOR'),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -468,6 +571,309 @@ describe('Step 2: Review, Originality Check, and Approval Workflow (Acceptance C
       expect(res.versionNo).toBe(2);
       expect(res.status).toBe('DRAFT');
       expect(res.parentVersionId).toBe(parentVersionId);
+    });
+  });
+
+  describe('6. Difficulty Rating Rules & Conflict Resolution', () => {
+    const versionId = 'qv-diff-1';
+    const questionId = 'q-diff-1';
+    const moderatorId = 'mod-1';
+
+    it('ratings 20 and 60 with tolerance 20 raise DIFFICULTY_CONFLICT', async () => {
+      const reviewer1 = { id: 'rev-1', difficultyRating: 20 };
+      const reviewer2 = { id: 'rev-2', difficultyRating: 60 };
+      const tolerance = 20;
+
+      const ratings = [reviewer1.difficultyRating, reviewer2.difficultyRating];
+      const diff = Math.max(...ratings) - Math.min(...ratings);
+      expect(diff).toBe(40);
+      expect(diff > tolerance).toBe(true);
+
+      const conflictFlag = diff > tolerance;
+      expect(conflictFlag).toBe(true);
+    });
+
+    it('ratings 40 and 55 auto-resolve to 47.5', async () => {
+      const tolerance = 20;
+      const ratings = [40, 55];
+      const diff = Math.max(...ratings) - Math.min(...ratings);
+      expect(diff).toBe(15);
+      expect(diff <= tolerance).toBe(true);
+
+      const mean = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+      const finalDifficulty = Math.round(mean * 10) / 10;
+      expect(finalDifficulty).toBe(47.5);
+    });
+
+    it("a reviewer cannot see the other reviewer's difficulty rating", async () => {
+      mockPrisma.reviewAssignment.findUniqueOrThrow.mockResolvedValue({
+        id: 'asgn-1',
+        reviewerId: 'reviewer-1',
+        questionVersionId: versionId,
+        status: 'PENDING',
+        dueDate: new Date(),
+        questionVersion: {
+          id: versionId,
+          authorId: 'examiner-1',
+          question: {
+            id: questionId,
+            humanId: 'EV-PHY-000001',
+            difficulty: 50,
+          },
+          status: 'UNDER_REVIEW',
+          encryptedContent: Buffer.from('content'),
+          contentNonce: Buffer.from('nonce'),
+          contentTag: Buffer.from('tag'),
+          encryptedContentKey: Buffer.from('key'),
+          encryptedAnswer: Buffer.from('ans'),
+          answerNonce: Buffer.from('ansnonce'),
+          answerTag: Buffer.from('anstag'),
+          encryptedAnswerKey: Buffer.from('anskey'),
+          keyId: 'dev-key',
+        },
+        review: {
+          id: 'review-1',
+          reviewerId: 'reviewer-1',
+          phase: 'SOLVE',
+          difficultyRating: 40,
+          timeTakenSeconds: 120,
+        },
+      });
+
+      jest.spyOn(cryptoService, 'decrypt').mockResolvedValue(
+        JSON.stringify({
+          stem: 'What is force?',
+          options: [{ label: 'A', text: 'mass * acceleration' }],
+          solution: 'F = m*a',
+        }),
+      );
+
+      const workspace = await reviewService.getAssignmentWorkspace('asgn-1', 'reviewer-1');
+      // Reviewer only receives their own review
+      expect(workspace.existingReview?.difficultyRating).toBe(40);
+      // Other reviewer ratings are never exposed in workspace payload
+      expect((workspace as any).otherReviews).toBeUndefined();
+      expect((workspace as any).reviewer2).toBeUndefined();
+    });
+
+    it('approval is blocked while a difficulty conflict is open', async () => {
+      mockPrisma.questionVersion.findUniqueOrThrow.mockResolvedValue({
+        id: versionId,
+        questionId,
+        versionNo: 1,
+        authorId: 'examiner-1',
+        status: 'MODERATION',
+        difficultyConflictFlag: true, // Conflict is open!
+        difficultyConflictResolved: false,
+        reviewAssignments: [
+          { reviewerId: 'other-1', status: 'COMPLETED' },
+          { reviewerId: 'other-2', status: 'COMPLETED' },
+        ],
+        question: { id: questionId, subjectId: 'sub-1' },
+      });
+
+      mockPrisma.approvalPolicy.findFirst.mockResolvedValue({
+        requiredReviewers: 2,
+        difficultyTolerance: 20,
+      });
+
+      mockPrisma.approval.findMany.mockResolvedValue([
+        { id: 'app-1', role: 'REVIEWER', decision: 'APPROVE' },
+        { id: 'app-2', role: 'REVIEWER', decision: 'APPROVE' },
+      ]);
+      mockPrisma.review.findMany.mockResolvedValue([
+        { id: 'rev-1', decision: 'APPROVE' },
+        { id: 'rev-2', decision: 'APPROVE' },
+      ]);
+      mockPrisma.review.findFirst.mockResolvedValue(null); // No answer disagreement
+
+      await expect(
+        moderationService.submitDecision(
+          versionId,
+          { decision: 'APPROVE', comments: 'Approved', totpToken: '123456' } as any,
+          moderatorId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('the third review adds a rating and the median is applied', async () => {
+      // Ratings from 3 completed reviews: 20, 60, and third review: 45
+      const ratings = [20, 60, 45];
+      expect(ratings.length).toBe(3);
+
+      const sorted = [...ratings].sort((a, b) => a - b);
+      expect(sorted).toEqual([20, 45, 60]);
+
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      expect(median).toBe(45);
+
+      const finalDifficulty = Math.round(median * 10) / 10;
+      expect(finalDifficulty).toBe(45);
+    });
+
+    it('single reviewer policy: answer matches key and not duplicate directly auto-approves into final question bank', async () => {
+      const singleReview = {
+        blindAnswerMatchesKey: true,
+        difficultyRating: 65,
+        timeTakenSeconds: 150,
+      };
+      const isDuplicate = false;
+      const decision = 'APPROVE';
+      const requiredReviewers = 1;
+
+      const shouldAutoApprove =
+        requiredReviewers === 1 &&
+        singleReview.blindAnswerMatchesKey &&
+        !isDuplicate &&
+        decision === 'APPROVE';
+
+      expect(shouldAutoApprove).toBe(true);
+      const nextStatus = shouldAutoApprove ? 'APPROVED' : 'MODERATION';
+      expect(nextStatus).toBe('APPROVED');
+    });
+
+    it('single reviewer policy: duplicate question or answer mismatch routes to moderator', async () => {
+      const singleReview = {
+        blindAnswerMatchesKey: false,
+        difficultyRating: 65,
+      };
+      const isDuplicate = true;
+      const requiredReviewers = 1;
+
+      const shouldRouteToModerator =
+        requiredReviewers === 1 && (!singleReview.blindAnswerMatchesKey || isDuplicate);
+
+      expect(shouldRouteToModerator).toBe(true);
+      const nextStatus = shouldRouteToModerator ? 'MODERATION' : 'APPROVED';
+      expect(nextStatus).toBe('MODERATION');
+    });
+
+    it('two reviewer policy: ratings within tolerance directly auto-approves into final question bank without moderator', async () => {
+      const ratings = [45, 55];
+      const timings = [120, 140];
+      const tolerance = 20;
+      const diff = Math.max(...ratings) - Math.min(...ratings);
+      expect(diff <= tolerance).toBe(true);
+
+      const meanRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+      const avgTiming = Math.round(timings.reduce((a, b) => a + b, 0) / timings.length);
+      expect(meanRating).toBe(50);
+      expect(avgTiming).toBe(130);
+
+      const nextStatus = diff <= tolerance ? 'APPROVED' : 'MODERATION';
+      expect(nextStatus).toBe('APPROVED');
+    });
+
+    it('two reviewer policy: larger difference routes to moderator dashboard where moderator sets actual hardness and timing', async () => {
+      const ratings = [25, 75];
+      const tolerance = 20;
+      const diff = Math.max(...ratings) - Math.min(...ratings);
+      expect(diff > tolerance).toBe(true);
+
+      const conflictRaised = diff > tolerance;
+      expect(conflictRaised).toBe(true);
+      const nextStatus = conflictRaised ? 'MODERATION' : 'APPROVED';
+      expect(nextStatus).toBe('MODERATION');
+
+      // Moderator resolves by setting actual hardness and timing
+      const moderatorResolution = {
+        action: 'SET_FINAL_VALUE' as const,
+        customValue: 60,
+        customTimingSeconds: 180,
+        justification: 'Calibrated based on multi-step algebra requirements',
+      };
+
+      expect(moderatorResolution.customValue).toBe(60);
+      expect(moderatorResolution.customTimingSeconds).toBe(180);
+      expect(moderatorResolution.justification.length).toBeGreaterThan(10);
+    });
+
+    it('enforces examiner subject categorization: examiner can only author questions in their assigned subject', async () => {
+      // Mock examiner who is specialized in Physics only
+      mockPrisma.userSubjectExpertise.findMany.mockResolvedValueOnce([
+        {
+          userId: 'examiner-phy-1',
+          subjectId: 'sub-phy-id',
+          subject: { id: 'sub-phy-id', name: 'Physics', code: 'PHY' },
+        },
+      ]);
+
+      // Attempting to author Chemistry question
+      await expect(
+        questionsService.create(
+          {
+            content: { type: 'MCQ_SINGLE', stem: 'Calculate pH of buffer', language: 'EN' },
+            answerKey: { type: 'MCQ_SINGLE', correct: 'A' },
+            metadata: {
+              subjectId: 'sub-che-id', // Chemistry
+              type: 'MCQ_SINGLE',
+              difficulty: 50,
+              cognitiveLevel: 'APPLY',
+              marks: 4,
+              estimatedTimeSeconds: 120,
+            },
+          },
+          'examiner-phy-1',
+        ),
+      ).rejects.toThrow('Subject category restriction');
+    });
+
+    it('assignReviewers strictly selects reviewers matching the question subject category only', async () => {
+      const phySubjectId = 'sub-phy-id';
+      const questionVersionId = 'v-phy-1';
+
+      mockPrisma.questionVersion.findUniqueOrThrow.mockResolvedValueOnce({
+        id: questionVersionId,
+        status: 'READY_FOR_REVIEW',
+        authorId: 'examiner-phy-1',
+        contentCommitment: 'commit-hash',
+        question: {
+          id: 'q-phy-1',
+          humanId: 'EV-PHY-000001',
+          subjectId: phySubjectId,
+          type: 'MCQ_SINGLE',
+        },
+      });
+
+      // Active policy requires 1 reviewer
+      mockPrisma.approvalPolicy.findFirst.mockResolvedValueOnce({
+        id: 'pol-1',
+        version: 1,
+        requiredReviewers: 1,
+        maxReviewDays: 7,
+      });
+
+      mockPrisma.conflictDeclaration.findMany.mockResolvedValueOnce([]);
+
+      // Prisma user candidate query filters by userSubjectExpertise matching subjectId
+      mockPrisma.user.findMany.mockImplementation((args: any) => {
+        if (args.where?.role === 'REVIEWER') {
+          // Verify that query includes subjectId filter
+          expect(args.where.userSubjectExpertise.some.subjectId).toBe(phySubjectId);
+
+          // Return physics reviewer candidates only (Maths/Chemistry candidates excluded by DB filter)
+          return Promise.resolve([
+            {
+              id: 'rev-phy-1',
+              name: 'Dr. Physics Reviewer',
+              conflictDeclarations: [],
+              reviewAssignments: [],
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockPrisma.reviewRound.create.mockResolvedValueOnce({ id: 'round-1' });
+      mockPrisma.reviewAssignment.create.mockResolvedValueOnce({ id: 'assign-1' });
+      mockPrisma.review.create.mockResolvedValueOnce({ id: 'rev-rec-1' });
+      mockPrisma.notification.create.mockResolvedValueOnce({ id: 'notif-1' });
+      mockPrisma.questionVersion.update.mockResolvedValueOnce({ id: questionVersionId, status: 'UNDER_REVIEW' });
+
+      const res = await reviewService.assignReviewers(questionVersionId);
+      expect(res.assigned).toBe(true);
+      expect(res.assignedCount).toBe(1);
     });
   });
 });

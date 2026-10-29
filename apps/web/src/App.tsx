@@ -51,7 +51,7 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
     case 'REVIEWER':
       return ['review-queue', 'stats'].includes(tab);
     case 'MODERATOR':
-      return ['moderator-console', 'review-queue', 'stats'].includes(tab);
+      return ['moderator-console', 'stats'].includes(tab);
     case 'EXAMINER':
       return ['dashboard', 'editor', 'import', 'stats'].includes(tab);
     default:
@@ -142,7 +142,7 @@ const MainLayout: React.FC = () => {
 
         {/* Moderator Console */}
         {resolvedTab === 'moderator-console' && (
-          <ModeratorConsole onNavigateToReviewQueue={() => setCurrentTab('review-queue')} />
+          <ModeratorConsole />
         )}
 
         {/* Admin Tabs */}

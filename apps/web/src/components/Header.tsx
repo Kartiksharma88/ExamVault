@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab }) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
+    <header className="sticky top-0 z-30 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
       <div className="w-full px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Logo and Brand */}
         <div
@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab }) => {
             </>
           )}
 
-          {(role === 'REVIEWER' || role === 'MODERATOR') && (
+          {role === 'REVIEWER' && (
             <button
               onClick={() => onSelectTab('review-queue')}
               className={getNavButtonClass('review-queue')}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { KaTeXPreview } from '../components/KaTeXPreview';
 import { apiRequest } from '../lib/api-client';
+import { ModalPortal } from '../components/ModalPortal';
 import {
   CheckCircle2,
   Clock,
@@ -834,7 +835,8 @@ export const ReviewerWorkspace: React.FC = () => {
 
       {/* Step-Up MFA Dialog */}
       {showMfaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4 border border-slate-200">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 bg-red-50 text-red-600 rounded-lg">
@@ -900,11 +902,13 @@ export const ReviewerWorkspace: React.FC = () => {
             </div>
           </div>
         </div>
+      </ModalPortal>
       )}
 
       {/* Review Signed Success Centered Modal */}
       {signedModal?.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl border border-slate-200 text-center space-y-6">
             <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center ring-8 ring-emerald-50">
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
@@ -944,6 +948,7 @@ export const ReviewerWorkspace: React.FC = () => {
             </button>
           </div>
         </div>
+      </ModalPortal>
       )}
     </div>
   );

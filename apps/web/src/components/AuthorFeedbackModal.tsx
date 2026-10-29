@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../lib/api-client';
+import { ModalPortal } from './ModalPortal';
 import {
   X,
   CheckCircle2,
@@ -84,7 +85,8 @@ export const AuthorFeedbackModal: React.FC<AuthorFeedbackModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -253,5 +255,6 @@ export const AuthorFeedbackModal: React.FC<AuthorFeedbackModalProps> = ({
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 };

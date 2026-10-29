@@ -3,6 +3,7 @@ import { apiRequest } from '../lib/api-client';
 import { formatDate } from '../lib/utils';
 import { DiffViewer } from './DiffViewer';
 import { KaTeXPreview } from './KaTeXPreview';
+import { ModalPortal } from './ModalPortal';
 import { X, History, ShieldCheck, Eye, GitCompare, User } from 'lucide-react';
 
 interface VersionItem {
@@ -88,7 +89,8 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-200 overflow-hidden shadow-2xl">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
@@ -302,5 +304,6 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 };

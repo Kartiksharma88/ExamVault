@@ -5,12 +5,15 @@ import {
   ForbiddenException,
   BadRequestException,
   OnModuleInit,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { AuditService } from '../audit/audit.service';
 import { PoliciesService } from '../policies/policies.service';
+import { ReviewService } from '../review/review.service';
 import { DuplicateDispositionInput } from '@examvault/shared';
 
 @Injectable()
@@ -25,6 +28,8 @@ export class OriginalityService implements OnModuleInit {
     private audit: AuditService,
     private policies: PoliciesService,
     private config: ConfigService,
+    @Inject(forwardRef(() => ReviewService))
+    private reviewService: ReviewService,
   ) {
     this.serviceUrl = this.config.get<string>('ORIGINALITY_SERVICE_URL', 'http://localhost:8000');
     this.serviceToken = this.config.get<string>(
@@ -387,6 +392,15 @@ export class OriginalityService implements OnModuleInit {
       this.logger.warn(`Failed adding screened version ${version.id} to copy index: ${e.message}`);
     }
 
+    // Automatically assign reviewers if question successfully passed screening to READY_FOR_REVIEW
+    if (savedReport.targetStatus === 'READY_FOR_REVIEW') {
+      try {
+        await this.reviewService.assignReviewers(versionId);
+      } catch (err: any) {
+        this.logger.error(`Automatic reviewer assignment failed for ${versionId}: ${err.message}`);
+      }
+    }
+
     return savedReport;
   }
 
@@ -465,6 +479,17 @@ export class OriginalityService implements OnModuleInit {
         versionNo: version.versionNo,
       },
     });
+
+    // If cleared to READY_FOR_REVIEW, trigger reviewer assignment
+    if (nextStatus === 'READY_FOR_REVIEW') {
+      try {
+        await this.reviewService.assignReviewers(versionId);
+      } catch (err: any) {
+        this.logger.error(
+          `Reviewer assignment failed following duplicate disposition for ${versionId}: ${err.message}`,
+        );
+      }
+    }
 
     return { success: true, disposition: input.disposition, nextStatus };
   }

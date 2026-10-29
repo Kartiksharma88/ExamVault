@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -14,7 +15,20 @@ import {
   ModeratorDecisionSchema,
   ReassignReviewerSchema,
   RetireQuestionSchema,
+  ResolveDifficultyConflictSchema,
 } from '@examvault/shared';
+
+function parseOrBadRequest<T>(schema: { parse: (val: any) => T }, data: any): T {
+  try {
+    return schema.parse(data);
+  } catch (err: any) {
+    if (err.name === 'ZodError' && Array.isArray(err.errors)) {
+      const msg = err.errors.map((e: any) => `${e.path.join('.') || 'payload'}: ${e.message}`).join('; ');
+      throw new BadRequestException(`Validation error: ${msg}`);
+    }
+    throw new BadRequestException(err.message || 'Invalid request payload');
+  }
+}
 
 @ApiTags('Moderation')
 @Controller('moderation')
@@ -43,12 +57,14 @@ export class ModerationController {
   async resolveDisagreement(
     @Param('reviewId') reviewId: string,
     @Body('resolutionNote') resolutionNote: string,
+    @Body('decision') decision: 'REQUEST_CHANGES' | 'REJECT' | 'LET_STAND',
     @Req() req: Request,
   ) {
     const result = await this.moderationService.resolveDisagreement(
       reviewId,
       resolutionNote || 'Resolved by moderator',
       req.userId!,
+      decision || 'LET_STAND',
     );
     return { success: true, data: result };
   }
@@ -61,7 +77,7 @@ export class ModerationController {
     @Body() body: any,
     @Req() req: Request,
   ) {
-    const parsed = ModeratorDecisionSchema.parse(body);
+    const parsed = parseOrBadRequest(ModeratorDecisionSchema, body);
     const result = await this.moderationService.submitDecision(
       versionId,
       parsed,
@@ -74,7 +90,7 @@ export class ModerationController {
   @Roles('MODERATOR')
   @ApiOperation({ summary: 'Reassign an overdue assignment to a new reviewer' })
   async reassignReviewer(@Body() body: any, @Req() req: Request) {
-    const parsed = ReassignReviewerSchema.parse(body);
+    const parsed = parseOrBadRequest(ReassignReviewerSchema, body);
     const result = await this.moderationService.reassignReviewer(
       parsed,
       req.userId!,
@@ -90,8 +106,25 @@ export class ModerationController {
     @Body() body: any,
     @Req() req: Request,
   ) {
-    const parsed = RetireQuestionSchema.parse(body);
+    const parsed = parseOrBadRequest(RetireQuestionSchema, body);
     const result = await this.moderationService.retireQuestion(
+      versionId,
+      parsed,
+      req.userId!,
+    );
+    return { success: true, data: result };
+  }
+
+  @Post('difficulty-conflict/:versionId/resolve')
+  @Roles('MODERATOR')
+  @ApiOperation({ summary: 'Resolve a reviewer difficulty rating conflict' })
+  async resolveDifficultyConflict(
+    @Param('versionId') versionId: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const parsed = parseOrBadRequest(ResolveDifficultyConflictSchema, body);
+    const result = await this.moderationService.resolveDifficultyConflict(
       versionId,
       parsed,
       req.userId!,

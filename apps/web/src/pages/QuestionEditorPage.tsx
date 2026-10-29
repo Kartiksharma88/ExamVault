@@ -100,14 +100,31 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [userSpecialization, setUserSpecialization] = useState<string[]>([]);
+
   // Fetch syllabus
   useEffect(() => {
     const fetchSyllabus = async () => {
       try {
         const subRes = await apiRequest<{ success: boolean; data: Subject[] }>('/syllabus/subjects');
-        setSubjects(subRes.data || []);
-        if (subRes.data && subRes.data.length > 0 && !subjectId) {
-          setSubjectId(subRes.data[0].id);
+        let availableSubjects = subRes.data || [];
+
+        // Fetch current user expertise
+        try {
+          const meRes = await apiRequest<{ success: boolean; data: any }>('/auth/me');
+          if (meRes.data?.userSubjectExpertise && meRes.data.userSubjectExpertise.length > 0) {
+            const allowedIds = meRes.data.userSubjectExpertise.map((e: any) => e.subjectId);
+            const userSubjects = availableSubjects.filter((s) => allowedIds.includes(s.id));
+            if (userSubjects.length > 0) {
+              availableSubjects = userSubjects;
+              setUserSpecialization(userSubjects.map((s) => `${s.name} (${s.code})`));
+            }
+          }
+        } catch (e) {}
+
+        setSubjects(availableSubjects);
+        if (availableSubjects.length > 0 && !subjectId) {
+          setSubjectId(availableSubjects[0].id);
         }
 
         const topRes = await apiRequest<{ success: boolean; data: Topic[] }>('/syllabus/topics');
@@ -458,6 +475,12 @@ export const QuestionEditorPage: React.FC<QuestionEditorPageProps> = ({
                 </option>
               ))}
             </select>
+            {userSpecialization.length > 0 && (
+              <div className="mt-1.5 flex items-center space-x-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                <span>Specialization:</span>
+                <span>{userSpecialization.join(', ')}</span>
+              </div>
+            )}
           </div>
 
           {/* Topic */}

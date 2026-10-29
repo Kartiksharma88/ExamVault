@@ -60,6 +60,21 @@ export class QuestionsService {
   async create(input: CreateQuestionInput, authorId: string) {
     const { content, answerKey, metadata } = input;
 
+    // Enforce author subject category specialization
+    const authorExpertise = await this.prisma.userSubjectExpertise.findMany({
+      where: { userId: authorId },
+      include: { subject: true },
+    });
+    if (authorExpertise.length > 0) {
+      const allowedSubjectIds = authorExpertise.map((e) => e.subjectId);
+      if (!allowedSubjectIds.includes(metadata.subjectId)) {
+        const allowedSubjectNames = authorExpertise.map((e) => e.subject.name).join(', ');
+        throw new ForbiddenException(
+          `Subject category restriction: You are registered as an examiner for ${allowedSubjectNames} only. You cannot submit questions for other subjects.`,
+        );
+      }
+    }
+
     // Sanitize markdown content (no raw HTML)
     const sanitizedContent = this.sanitizeContent(content);
 
@@ -203,6 +218,22 @@ export class QuestionsService {
     const newVersionNo = isSubmitted ? currentVersion.versionNo + 1 : currentVersion.versionNo;
 
     const { content, answerKey, metadata } = input;
+
+    // Enforce author subject category specialization on edit
+    const authorExpertise = await this.prisma.userSubjectExpertise.findMany({
+      where: { userId },
+      include: { subject: true },
+    });
+    if (authorExpertise.length > 0) {
+      const allowedSubjectIds = authorExpertise.map((e) => e.subjectId);
+      if (!allowedSubjectIds.includes(metadata.subjectId)) {
+        const allowedSubjectNames = authorExpertise.map((e) => e.subject.name).join(', ');
+        throw new ForbiddenException(
+          `Subject category restriction: You are registered as an examiner for ${allowedSubjectNames} only. You cannot change this question to another subject.`,
+        );
+      }
+    }
+
     const sanitizedContent = this.sanitizeContent(content);
 
     // Compute commitment
@@ -491,11 +522,112 @@ export class QuestionsService {
       }
     }
 
-    // MODERATOR: Can only read versions in MODERATION stage or under DUPLICATE_FLAGGED
+    // MODERATOR: Can only read versions strictly within their queue
     if (userRole === 'MODERATOR') {
-      if (!['MODERATION', 'DUPLICATE_FLAGGED'].includes(version.status)) {
+      // 1. Separation of duties: Cannot read or moderate their own authored question
+      if (question.authorId === userId) {
+        await this.audit.log({
+          actorId: userId,
+          action: 'ACCESS_DENIED',
+          targetType: 'question',
+          targetId: questionId,
+          metadata: { reason: 'moderator_is_author', role: 'MODERATOR' },
+        });
+        throw new ForbiddenException('Moderators cannot read or moderate questions they authored');
+      }
+
+      // Cannot act as both reviewer and moderator on same version
+      const wasReviewer = await this.prisma.reviewAssignment.findFirst({
+        where: {
+          questionVersionId: version.id,
+          reviewerId: userId,
+        },
+      });
+      if (wasReviewer) {
+        await this.audit.log({
+          actorId: userId,
+          action: 'ACCESS_DENIED',
+          targetType: 'question_version',
+          targetId: version.id,
+          metadata: { reason: 'moderator_was_reviewer', role: 'MODERATOR' },
+        });
+        throw new ForbiddenException('Separation of duties: You were assigned as reviewer on this version');
+      }
+
+      // 2. Strict queue barrier:
+      // Queue = flagged duplicates (DUPLICATE_FLAGGED), versions awaiting final approval (MODERATION),
+      // or questions with an active unresolved blind-solve disagreement.
+      const hasUnresolvedDisagreement = await this.prisma.review.findFirst({
+        where: {
+          questionVersionId: version.id,
+          disagreementFlag: true,
+          disagreementResolved: false,
+        },
+      });
+
+      const inQueue =
+        version.status === 'DUPLICATE_FLAGGED' ||
+        version.status === 'MODERATION' ||
+        !!hasUnresolvedDisagreement ||
+        (version.difficultyConflictFlag && !version.difficultyConflictResolved);
+
+      if (!inQueue) {
+        await this.audit.log({
+          actorId: userId,
+          action: 'ACCESS_DENIED',
+          targetType: 'question_version',
+          targetId: version.id,
+          metadata: {
+            reason: 'out_of_queue_access',
+            status: version.status,
+            role: 'MODERATOR',
+            severity: 'HIGH',
+          },
+        });
         throw new ForbiddenException(
-          'Moderators can only read question versions in moderation stage or under a duplicate flag',
+          'Access Denied: Moderators can only access questions that reach their active queue (flagged duplicates, unresolved disagreements, or awaiting final approval).',
+        );
+      }
+
+      // 3. Rate-limit content reads per moderator (configurable per hour and day)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const hourlyLimit = parseInt(process.env.MODERATOR_HOURLY_READ_LIMIT || '50', 10);
+      const dailyLimit = parseInt(process.env.MODERATOR_DAILY_READ_LIMIT || '200', 10);
+
+      const [hourlyReads, dailyReads] = await Promise.all([
+        this.prisma.auditEvent.count({
+          where: {
+            actorId: userId,
+            action: 'QUESTION_CONTENT_READ',
+            timestamp: { gte: oneHourAgo },
+          },
+        }),
+        this.prisma.auditEvent.count({
+          where: {
+            actorId: userId,
+            action: 'QUESTION_CONTENT_READ',
+            timestamp: { gte: oneDayAgo },
+          },
+        }),
+      ]);
+
+      if (hourlyReads >= hourlyLimit || dailyReads >= dailyLimit) {
+        await this.audit.log({
+          actorId: userId,
+          action: 'MODERATOR_READ_LIMIT_EXCEEDED',
+          targetType: 'moderator_limit',
+          targetId: userId,
+          metadata: {
+            hourlyReads,
+            hourlyLimit,
+            dailyReads,
+            dailyLimit,
+            severity: 'HIGH',
+          },
+        });
+        throw new ForbiddenException(
+          `Moderator content read limit exceeded (${hourlyReads >= hourlyLimit ? 'Hourly' : 'Daily'} limit). High-severity security alert logged.`,
         );
       }
     }
@@ -793,6 +925,30 @@ export class QuestionsService {
       where.authorId = { not: userId };
       where.versions = { some: { status: 'SUBMITTED' } };
     }
+    // MODERATOR sees only questions that reach their queue (DUPLICATE_FLAGGED, MODERATION, or unresolved disagreements)
+    if (userRole === 'MODERATOR') {
+      where.authorId = { not: userId }; // Cannot see own authored questions
+      where.versions = {
+        some: {
+          OR: [
+            { status: 'DUPLICATE_FLAGGED' },
+            { status: 'MODERATION' },
+            {
+              reviews: {
+                some: {
+                  disagreementFlag: true,
+                  disagreementResolved: false,
+                },
+              },
+            },
+            {
+              difficultyConflictFlag: true,
+              difficultyConflictResolved: false,
+            },
+          ],
+        },
+      };
+    }
 
     if (filters.subjectId) where.subjectId = filters.subjectId;
     if (filters.type) where.type = filters.type;
@@ -835,7 +991,7 @@ export class QuestionsService {
         id: q.id,
         humanId: q.humanId,
         authorId: q.authorId,
-        authorName: q.author.name,
+        authorName: userRole === 'MODERATOR' ? 'Author' : q.author.name,
         subjectName: q.subject.name,
         subjectCode: q.subject.code,
         topicName: q.topic?.name,

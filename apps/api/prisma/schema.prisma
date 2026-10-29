@@ -7,9 +7,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ── Users ──────────────────────────────────────────────────────────
@@ -295,12 +294,25 @@ model QuestionVersion {
   answerCiphertextSha256 String?            @map("answer_ciphertext_sha256") @db.VarChar(64)
 
   // Step 2 versioning additions
-  parentVersionId     String?            @map("parent_version_id") @db.Uuid
-  changeJustification String?            @map("change_justification") @db.Text
-  policyVersion       Int?               @map("policy_version")
-  supersededAt        DateTime?          @map("superseded_at")
-  retirementReason    String?            @map("retirement_reason") @db.VarChar(64)
-  retiredById         String?            @map("retired_by_id") @db.Uuid
+  parentVersionId            String?            @map("parent_version_id") @db.Uuid
+  changeJustification        String?            @map("change_justification") @db.Text
+  policyVersion              Int?               @map("policy_version")
+  supersededAt               DateTime?          @map("superseded_at")
+  retirementReason           String?            @map("retirement_reason") @db.VarChar(64)
+  retiredById                String?            @map("retired_by_id") @db.Uuid
+
+  // Difficulty Derivation & Conflict Resolution
+  finalDifficulty            Float?             @map("final_difficulty")
+  difficultySource           String?            @default("EXPERT_RATING") @map("difficulty_source") @db.VarChar(32)
+  difficultyDerivationMethod String?            @map("difficulty_derivation_method") @db.VarChar(64)
+  difficultySetById          String?            @map("difficulty_set_by_id") @db.Uuid
+  difficultyConflictFlag     Boolean            @default(false) @map("difficulty_conflict_flag")
+  difficultyConflictResolved Boolean            @default(false) @map("difficulty_conflict_resolved")
+  difficultyResolutionNote   String?            @map("difficulty_resolution_note") @db.Text
+  encryptedDiffJustification Bytes?             @map("encrypted_diff_justification")
+  diffJustificationNonce     Bytes?             @map("diff_justification_nonce")
+  diffJustificationTag       Bytes?             @map("diff_justification_tag")
+  diffJustificationKey       Bytes?             @map("diff_justification_key")
 
   createdAt           DateTime           @default(now()) @map("created_at")
 
@@ -336,6 +348,7 @@ model ApprovalPolicy {
   requireModerator           Boolean           @default(true) @map("require_moderator")
   requireLanguageReview      Boolean           @default(true) @map("require_language_review")
   maxReviewDays              Int               @default(7) @map("max_review_days")
+  difficultyTolerance        Float             @default(20) @map("difficulty_tolerance")
   exactMatchThreshold        Float             @default(1.0) @map("exact_match_threshold")
   highSimilarityThreshold    Float             @default(0.85) @map("high_similarity_threshold")
   mediumSimilarityThreshold  Float             @default(0.60) @map("medium_similarity_threshold")

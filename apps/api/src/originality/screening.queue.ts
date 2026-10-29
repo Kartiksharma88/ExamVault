@@ -1,6 +1,7 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OriginalityService } from './originality.service';
+import { ReviewService } from '../review/review.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const { PgBoss } = require('pg-boss');
@@ -16,6 +17,8 @@ export class ScreeningQueue implements OnModuleInit, OnModuleDestroy {
     private originalityService: OriginalityService,
     private prisma: PrismaService,
     private config: ConfigService,
+    @Inject(forwardRef(() => ReviewService))
+    private reviewService: ReviewService,
   ) {}
 
   async onModuleInit() {
@@ -103,6 +106,22 @@ export class ScreeningQueue implements OnModuleInit, OnModuleDestroy {
             await this.originalityService.screenQuestion(v.id);
           } catch (e: any) {
             this.logger.warn(`Worker screening attempt failed for ${v.id}: ${e.message}`);
+          }
+        }
+
+        // Also check for any questions in READY_FOR_REVIEW that don't have review rounds yet
+        const unassigned = await this.prisma.questionVersion.findMany({
+          where: {
+            status: 'READY_FOR_REVIEW',
+            reviewRounds: { none: {} },
+          },
+          take: 3,
+        });
+        for (const u of unassigned) {
+          try {
+            await this.reviewService.assignReviewers(u.id);
+          } catch (e: any) {
+            this.logger.warn(`Worker review assignment failed for ${u.id}: ${e.message}`);
           }
         }
       } catch (err) {}

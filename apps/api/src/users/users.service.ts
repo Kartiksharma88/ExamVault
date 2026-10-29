@@ -12,7 +12,7 @@ export class UsersService {
   ) {}
 
   async create(
-    data: { email: string; name: string; role: string; password: string },
+    data: { email: string; name: string; role: string; password: string; subjectIds?: string[] },
     actorId: string,
   ) {
     // Check for existing email
@@ -30,6 +30,11 @@ export class UsersService {
         role: data.role as any,
         passwordHash,
         mustSetupMfa: true,
+        ...(data.subjectIds && data.subjectIds.length > 0 && {
+          userSubjectExpertise: {
+            create: data.subjectIds.map((subjectId) => ({ subjectId })),
+          },
+        }),
       },
       select: {
         id: true,
@@ -37,6 +42,12 @@ export class UsersService {
         name: true,
         role: true,
         mfaEnabled: true,
+        userSubjectExpertise: {
+          select: {
+            subjectId: true,
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
@@ -47,7 +58,7 @@ export class UsersService {
       action: 'USER_CREATE',
       targetType: 'user',
       targetId: user.id,
-      metadata: { role: data.role, email: data.email },
+      metadata: { role: data.role, email: data.email, subjectIds: data.subjectIds },
     });
 
     return user;
@@ -62,6 +73,12 @@ export class UsersService {
         role: true,
         mfaEnabled: true,
         isActive: true,
+        userSubjectExpertise: {
+          select: {
+            subjectId: true,
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
@@ -79,12 +96,42 @@ export class UsersService {
         role: true,
         mfaEnabled: true,
         isActive: true,
+        userSubjectExpertise: {
+          select: {
+            subjectId: true,
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
+  }
+
+  async assignSubjects(userId: string, subjectIds: string[], actorId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userSubjectExpertise.deleteMany({ where: { userId } });
+      for (const sId of subjectIds) {
+        await tx.userSubjectExpertise.create({
+          data: { userId, subjectId: sId },
+        });
+      }
+    });
+
+    await this.audit.log({
+      actorId,
+      action: 'USER_SUBJECTS_UPDATE',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { subjectIds },
+    });
+
+    return this.findById(userId);
   }
 
   async update(

@@ -249,7 +249,7 @@ export const QuestionMetadataSchema = z.object({
   topicId: z.string().uuid().optional(),
   subtopicId: z.string().uuid().optional(),
   type: QuestionType,
-  difficulty: z.number().min(0).max(1),
+  difficulty: z.number().min(0).max(100),
   cognitiveLevel: CognitiveLevel,
   marks: z.number().positive(),
   negativeMarks: z.number().min(0).default(0),
@@ -440,6 +440,7 @@ export const ApprovalPolicySchema = z.object({
   requireModerator: z.boolean().default(true),
   requireLanguageReview: z.boolean().default(true),
   maxReviewDays: z.number().int().min(1).default(7),
+  difficultyTolerance: z.number().default(20),
   exactMatchThreshold: z.number().min(0).max(1).default(1.0),
   highSimilarityThreshold: z.number().min(0).max(1).default(0.85),
   mediumSimilarityThreshold: z.number().min(0).max(1).default(0.60),
@@ -461,6 +462,7 @@ export const ProposePolicySchema = z.object({
   requireModerator: z.boolean().default(true),
   requireLanguageReview: z.boolean().default(true),
   maxReviewDays: z.number().int().min(1).default(7),
+  difficultyTolerance: z.number().min(0).max(100).default(20),
   exactMatchThreshold: z.number().min(0).max(1).default(1.0),
   highSimilarityThreshold: z.number().min(0).max(1).default(0.85),
   mediumSimilarityThreshold: z.number().min(0).max(1).default(0.60),
@@ -472,11 +474,19 @@ export const ApprovePolicySchema = z.object({
 });
 export type ApprovePolicyInput = z.infer<typeof ApprovePolicySchema>;
 
+export const QuickConfigurePolicySchema = z.object({
+  subjectId: z.string().uuid().optional(),
+  examId: z.string().uuid().optional(),
+  requiredReviewers: z.number().int().min(1).max(5).default(2),
+  difficultyTolerance: z.number().min(0).max(100).default(20),
+});
+export type QuickConfigurePolicyInput = z.infer<typeof QuickConfigurePolicySchema>;
+
 // ── Step 2: Reviewer Schemas (Blind Solve & Checklist) ─────────────
 export const BlindAnswerSubmitSchema = z.object({
   blindAnswer: z.union([z.string(), z.array(z.string()), z.number()]),
   timeTakenSeconds: z.number().int().positive(),
-  difficultyRating: z.number().min(0).max(1),
+  difficultyRating: z.number().min(0).max(100),
 });
 export type BlindAnswerSubmitInput = z.infer<typeof BlindAnswerSubmitSchema>;
 
@@ -510,7 +520,7 @@ export type DuplicateDispositionInput = z.infer<typeof DuplicateDispositionSchem
 
 export const ModeratorDecisionSchema = z.object({
   decision: ReviewDecision,
-  comments: z.string().min(1).max(5000),
+  comments: z.string().max(5000).optional().default(''),
   totpToken: z.string().length(6).regex(/^\d{6}$/),
 });
 export type ModeratorDecisionInput = z.infer<typeof ModeratorDecisionSchema>;
@@ -527,6 +537,23 @@ export const RetireQuestionSchema = z.object({
   note: z.string().min(5).max(1000),
 });
 export type RetireQuestionInput = z.infer<typeof RetireQuestionSchema>;
+
+export const DifficultyResolutionAction = z.enum([
+  'ACCEPT_MEAN',
+  'SET_FINAL_VALUE',
+  'REQUEST_THIRD_REVIEW',
+  'REQUEST_CHANGES',
+]);
+export type DifficultyResolutionAction = z.infer<typeof DifficultyResolutionAction>;
+
+export const ResolveDifficultyConflictSchema = z.object({
+  action: DifficultyResolutionAction,
+  customValue: z.number().min(0).max(100).optional(),
+  customTimingSeconds: z.number().int().positive().optional(),
+  autoApprove: z.boolean().optional(),
+  justification: z.string().min(10, 'Justification must be at least 10 characters').max(5000),
+});
+export type ResolveDifficultyConflictInput = z.infer<typeof ResolveDifficultyConflictSchema>;
 
 // ── Step 2: Author Revision & Feedback ─────────────────────────────
 export const CreateNewVersionSchema = z.object({

@@ -91,6 +91,7 @@ export class PoliciesService {
         questionType: (input.questionType as any) || null,
         version: nextVersion,
         requiredReviewers: input.requiredReviewers ?? 2,
+        difficultyTolerance: input.difficultyTolerance ?? 20,
         requireBlindSolve: input.requireBlindSolve ?? true,
         requireModerator: input.requireModerator ?? true,
         requireLanguageReview: input.requireLanguageReview ?? true,
@@ -114,6 +115,7 @@ export class PoliciesService {
         subjectId: policy.subjectId,
         examId: policy.examId,
         requiredReviewers: policy.requiredReviewers,
+        difficultyTolerance: (policy as any).difficultyTolerance,
       },
     });
 

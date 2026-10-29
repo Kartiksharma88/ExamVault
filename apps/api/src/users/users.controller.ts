@@ -22,10 +22,21 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: 'Create a new user (ADMIN only)' })
   async create(
-    @Body() body: { email: string; name: string; role: string; password: string },
+    @Body() body: { email: string; name: string; role: string; password: string; subjectIds?: string[] },
     @Req() req: Request,
   ) {
     const user = await this.usersService.create(body, req.userId!);
+    return { success: true, data: user };
+  }
+
+  @Patch(':id/subjects')
+  @ApiOperation({ summary: 'Assign subjects to user (ADMIN only)' })
+  async assignSubjects(
+    @Param('id') id: string,
+    @Body() body: { subjectIds: string[] },
+    @Req() req: Request,
+  ) {
+    const user = await this.usersService.assignSubjects(id, body.subjectIds || [], req.userId!);
     return { success: true, data: user };
   }
 

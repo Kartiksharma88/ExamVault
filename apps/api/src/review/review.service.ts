@@ -734,6 +734,11 @@ export class ReviewService {
       );
 
       let nextStatus = version.status;
+      let derivedDifficulty: number | null = null;
+      let derivationMethod: string | null = null;
+      let diffConflictRaised = false;
+      let ratingsList: number[] = [];
+      let policyTolerance = 20;
 
       if (input.decision === 'REQUEST_CHANGES' || anyChangesRequested) {
         nextStatus = 'CHANGES_REQUESTED';
@@ -748,18 +753,257 @@ export class ReviewService {
           data: { status: 'REJECTED' },
         });
       } else if (allCompleted) {
-        // If all approved and no blocking disagreement, move to MODERATION
-        if (!anyUnresolvedDisagreement) {
-          nextStatus = 'MODERATION';
-          await tx.questionVersion.update({
-            where: { id: version.id },
-            data: { status: 'MODERATION' },
-          });
+        // Collect all reviewer difficulty ratings and time taken
+        const ratings = roundAssignments
+          .map((a) => a.review?.difficultyRating)
+          .filter((r): r is number => typeof r === 'number');
+        const timings = roundAssignments
+          .map((a) => a.review?.timeTakenSeconds)
+          .filter((t): t is number => typeof t === 'number');
+        ratingsList = ratings;
+
+        // Fetch active approval policy (subject specific or global fallback)
+        const policy = await this.policies.getActivePolicy(
+          version.question.subjectId,
+          undefined,
+          version.question.type,
+        );
+        const requiredCount = policy?.requiredReviewers ?? 2;
+        policyTolerance = (policy as any)?.difficultyTolerance ?? 20;
+
+        // Check if question is flagged as duplicate / existing question
+        const originalityReport = await tx.originalityReport.findUnique({
+          where: { questionVersionId: version.id },
+        });
+        const isDuplicate =
+          version.status === 'DUPLICATE_FLAGGED' ||
+          Boolean(
+            originalityReport &&
+              (originalityReport.riskLevel === 'HIGH' ||
+                originalityReport.riskLevel === 'FLAGGED' ||
+                originalityReport.highestScore >= 0.85),
+          );
+
+        if (requiredCount === 1) {
+          // ── CASE 1: Single Reviewer Policy (1 Reviewer Fast-Track) ──────
+          const singleReview = roundAssignments[0]?.review;
+          const answerMatches =
+            singleReview?.blindAnswerMatchesKey === true && !anyUnresolvedDisagreement;
+
+          if (answerMatches && !isDuplicate && input.decision === 'APPROVE') {
+            // Rule: If single reviewer reviews, submitted, blind answer matches key and not duplicate:
+            // Directly added to the final question bank without moderator!
+            nextStatus = 'APPROVED';
+            derivedDifficulty = ratings[0] ?? version.finalDifficulty ?? 50;
+            derivationMethod = 'SINGLE_REVIEWER';
+            const finalTiming = timings[0] ?? version.question.estimatedTime;
+
+            await tx.questionVersion.update({
+              where: { id: version.id },
+              data: {
+                status: 'APPROVED',
+                finalDifficulty: derivedDifficulty,
+                difficultySource: 'EXPERT_RATING',
+                difficultyDerivationMethod: derivationMethod,
+                difficultyConflictFlag: false,
+                difficultyConflictResolved: true,
+              },
+            });
+
+            await tx.question.update({
+              where: { id: version.questionId },
+              data: {
+                difficulty: derivedDifficulty,
+                estimatedTime: finalTiming,
+              },
+            });
+
+            // Atomic supersession if revision
+            if (version.parentVersionId) {
+              await tx.questionVersion.update({
+                where: { id: version.parentVersionId },
+                data: {
+                  status: 'RETIRED',
+                  supersededAt: timestamp,
+                  retirementReason: 'SUPERSEDED',
+                },
+              });
+            }
+          } else {
+            // Rule: If duplicate or already existing question (or answer key mismatch),
+            // it goes to the moderator for final review.
+            nextStatus = 'MODERATION';
+            await tx.questionVersion.update({
+              where: { id: version.id },
+              data: { status: isDuplicate ? 'DUPLICATE_FLAGGED' : 'MODERATION' },
+            });
+          }
+        } else {
+          // ── CASE 2: Two or More Reviewers Policy ────────────────────────
+          if (anyUnresolvedDisagreement || isDuplicate) {
+            // Mismatch or duplicate goes to moderator dashboard
+            nextStatus = 'MODERATION';
+            await tx.questionVersion.update({
+              where: { id: version.id },
+              data: { status: isDuplicate ? 'DUPLICATE_FLAGGED' : 'MODERATION' },
+            });
+          } else if (ratings.length >= 3) {
+            // 3+ ratings (e.g. after tie-breaker third review)
+            const sorted = [...ratings].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            const median =
+              sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            derivedDifficulty = Math.round(median * 10) / 10;
+            derivationMethod = 'MEDIAN_THIRD_REVIEW';
+            const avgTiming =
+              timings.length > 0
+                ? Math.round(timings.reduce((s, t) => s + t, 0) / timings.length)
+                : version.question.estimatedTime;
+
+            nextStatus = 'APPROVED';
+            await tx.questionVersion.update({
+              where: { id: version.id },
+              data: {
+                status: 'APPROVED',
+                finalDifficulty: derivedDifficulty,
+                difficultySource: 'EXPERT_RATING',
+                difficultyDerivationMethod: derivationMethod,
+                difficultyConflictFlag: false,
+                difficultyConflictResolved: true,
+              },
+            });
+            await tx.question.update({
+              where: { id: version.questionId },
+              data: {
+                difficulty: derivedDifficulty,
+                estimatedTime: avgTiming,
+              },
+            });
+
+            if (version.parentVersionId) {
+              await tx.questionVersion.update({
+                where: { id: version.parentVersionId },
+                data: {
+                  status: 'RETIRED',
+                  supersededAt: timestamp,
+                  retirementReason: 'SUPERSEDED',
+                },
+              });
+            }
+          } else if (ratings.length >= 2) {
+            const minRating = Math.min(...ratings);
+            const maxRating = Math.max(...ratings);
+            const diff = maxRating - minRating;
+
+            if (diff <= policyTolerance) {
+              // Rule: Difficulty is approximately close (<= tolerance, default 20 points):
+              // Directly added to the final question bank without any moderator in between!
+              nextStatus = 'APPROVED';
+              const mean = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+              derivedDifficulty = Math.round(mean * 10) / 10;
+              derivationMethod = 'AUTO_MEAN';
+              const avgTiming =
+                timings.length > 0
+                  ? Math.round(timings.reduce((sum, t) => sum + t, 0) / timings.length)
+                  : version.question.estimatedTime;
+
+              await tx.questionVersion.update({
+                where: { id: version.id },
+                data: {
+                  status: 'APPROVED',
+                  finalDifficulty: derivedDifficulty,
+                  difficultySource: 'EXPERT_RATING',
+                  difficultyDerivationMethod: derivationMethod,
+                  difficultyConflictFlag: false,
+                  difficultyConflictResolved: true,
+                },
+              });
+              await tx.question.update({
+                where: { id: version.questionId },
+                data: {
+                  difficulty: derivedDifficulty,
+                  estimatedTime: avgTiming,
+                },
+              });
+
+              if (version.parentVersionId) {
+                await tx.questionVersion.update({
+                  where: { id: version.parentVersionId },
+                  data: {
+                    status: 'RETIRED',
+                    supersededAt: timestamp,
+                    retirementReason: 'SUPERSEDED',
+                  },
+                });
+              }
+            } else {
+              // Rule: Larger difference between difficulty levels:
+              // Goes to the moderator dashboard for resolution
+              diffConflictRaised = true;
+              nextStatus = 'MODERATION';
+              await tx.questionVersion.update({
+                where: { id: version.id },
+                data: {
+                  status: 'MODERATION',
+                  difficultyConflictFlag: true,
+                  difficultyConflictResolved: false,
+                },
+              });
+            }
+          }
         }
       }
 
-      return { approval, nextStatus, allCompleted };
+      return { approval, nextStatus, allCompleted, diffConflictRaised, derivedDifficulty, derivationMethod, ratingsList, policyTolerance };
     });
+
+    if (result.diffConflictRaised) {
+      await this.audit.log({
+        actorId: 'system',
+        action: 'DIFFICULTY_CONFLICT_RAISED',
+        targetType: 'question_version',
+        targetId: version.id,
+        metadata: {
+          versionNo: version.versionNo,
+          ratings: result.ratingsList,
+          tolerance: result.policyTolerance,
+          difference: Math.max(...result.ratingsList) - Math.min(...result.ratingsList),
+          role: 'SYSTEM',
+        },
+      });
+    } else if (result.derivedDifficulty !== null) {
+      await this.audit.log({
+        actorId: 'system',
+        action: 'DIFFICULTY_DERIVED',
+        targetType: 'question_version',
+        targetId: version.id,
+        metadata: {
+          versionNo: version.versionNo,
+          finalDifficulty: result.derivedDifficulty,
+          method: result.derivationMethod,
+          ratings: result.ratingsList,
+          tolerance: result.policyTolerance,
+          source: 'EXPERT_RATING',
+          role: 'SYSTEM',
+        },
+      });
+    }
+
+    if (result.nextStatus === 'APPROVED') {
+      await this.audit.log({
+        actorId: 'system',
+        action: 'QUESTION_APPROVED_TO_BANK',
+        targetType: 'question_version',
+        targetId: version.id,
+        metadata: {
+          versionNo: version.versionNo,
+          finalDifficulty: result.derivedDifficulty,
+          derivationMethod: result.derivationMethod,
+          autoApprovedWithoutModerator: true,
+          role: 'SYSTEM',
+        },
+      });
+    }
 
     await this.audit.log({
       actorId: reviewerId,

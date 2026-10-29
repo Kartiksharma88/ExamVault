@@ -539,12 +539,33 @@ async function main() {
 
   console.log(`  ✅ Syllabus: ${phyTopics.length + cheTopics.length + matTopics.length} topics`);
 
-  // ── 3.1 Reviewer Subject Expertise ──
+  // ── 3.1 Examiner & Reviewer Subject Expertise ──
   const subjectMap: Record<string, string> = {
     PHY: phySubject.id,
     CHE: cheSubject.id,
     MAT: matSubject.id,
   };
+
+  // Examiner expertise
+  const examinerExpertise = [
+    { user: examiner1, codes: ['PHY'] },
+    { user: examiner2, codes: ['MAT'] },
+    { user: examiner3, codes: ['CHE'] },
+  ];
+  for (const exp of examinerExpertise) {
+    for (const code of exp.codes) {
+      await prisma.userSubjectExpertise.upsert({
+        where: { userId_subjectId: { userId: exp.user.id, subjectId: subjectMap[code] } },
+        update: {},
+        create: {
+          userId: exp.user.id,
+          subjectId: subjectMap[code],
+        },
+      });
+    }
+  }
+
+  // Reviewer expertise
   for (let i = 0; i < reviewerData.length; i++) {
     const r = reviewerData[i];
     const user = reviewers[i];
@@ -559,6 +580,16 @@ async function main() {
       });
     }
   }
+
+  // Legacy reviewer PHY
+  await prisma.userSubjectExpertise.upsert({
+    where: { userId_subjectId: { userId: legacyReviewer.id, subjectId: phySubject.id } },
+    update: {},
+    create: {
+      userId: legacyReviewer.id,
+      subjectId: phySubject.id,
+    },
+  });
 
   // ── 3.2 Sample Conflict Declarations ──
   function encryptConflict(text: string, userId: string, mKey: Buffer) {
