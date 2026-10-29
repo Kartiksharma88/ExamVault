@@ -5,6 +5,10 @@ node_modules/
 dist/
 build/
 .next/
+!packages/shared/dist/
+!packages/shared/dist/**
+!packages/audit-canonical/dist/
+!packages/audit-canonical/dist/**
 
 # Environment
 .env
