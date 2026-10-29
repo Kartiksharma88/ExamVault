@@ -4,7 +4,7 @@
   "private": true,
   "description": "Secure examination paper generation framework",
   "scripts": {
-    "postinstall": "pnpm --filter @examvault/api run db:generate",
+    "postinstall": "pnpm --filter \"@examvault/shared\" --filter \"@examvault/audit-canonical\" run build && pnpm --filter @examvault/api run db:generate",
     "dev": "pnpm --parallel -r run dev",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",

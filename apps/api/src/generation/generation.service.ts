@@ -635,7 +635,7 @@ export class GenerationService {
         final_time_seconds,
         content_commitment
       FROM "eligible_question_versions"
-      WHERE subject_id IN (${blueprint.sections.map((s) => `'${s.subjectId}'`).join(',')})
+      WHERE subject_id IN (${blueprint.sections.map((s: any) => `'${s.subjectId}'`).join(',')})
       ORDER BY version_id ASC
     `);
 

@@ -41,7 +41,7 @@ export class BlueprintsService {
     const parseResult = BlueprintSchema.safeParse(input.content);
     if (!parseResult.success) {
       throw new BadRequestException(
-        `Invalid blueprint schema: ${parseResult.error.issues.map((i) => i.message).join('; ')}`,
+        `Invalid blueprint schema: ${parseResult.error.issues.map((i: any) => i.message).join('; ')}`,
       );
     }
     const blueprintData = parseResult.data;

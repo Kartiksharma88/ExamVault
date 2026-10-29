@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "pnpm --filter \"@examvault/shared\" --filter \"@examvault/audit-canonical\" run build && prisma generate && nest build",
     "dev": "nest start --watch",
     "start": "node dist/main",
     "start:prod": "node dist/main",
