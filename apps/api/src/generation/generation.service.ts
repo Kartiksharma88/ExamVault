@@ -45,6 +45,16 @@ export class GenerationService {
     private config: ConfigService,
   ) {}
 
+  private getPaperSelectorUrl(path: string): string {
+    const base = (
+      process.env.PAPER_SELECTOR_URL ||
+      this.config.get<string>('PAPER_SELECTOR_URL') ||
+      'http://localhost:8001'
+    ).replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+    return `${base}/${cleanPath}`;
+  }
+
   /**
    * 5.A: Bank Overview — COUNTS ONLY (no ids, no text, no lists).
    * Four numbers, overall and per subject:
@@ -673,8 +683,7 @@ export class GenerationService {
     let solverStats: any = {};
 
     try {
-      const selectorUrl = this.config.get<string>('PAPER_SELECTOR_URL') || 'http://localhost:8001';
-      const response = await fetch(`${selectorUrl}/select`, {
+      const response = await fetch(this.getPaperSelectorUrl('select'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

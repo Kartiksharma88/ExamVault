@@ -1,0 +1,60 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "api": {
+      "root": "apps/api",
+      "framework": "nestjs",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "originality-service",
+          "format": "url",
+          "env": "ORIGINALITY_SERVICE_URL"
+        },
+        {
+          "type": "service",
+          "service": "witness-service",
+          "format": "url",
+          "env": "WITNESS_SERVICE_URL"
+        },
+        {
+          "type": "service",
+          "service": "paper-selector",
+          "format": "url",
+          "env": "PAPER_SELECTOR_URL"
+        }
+      ]
+    },
+    "originality-service": {
+      "root": "apps/originality-service",
+      "framework": "fastapi"
+    },
+    "paper-selector": {
+      "root": "apps/paper-selector",
+      "framework": "fastapi"
+    },
+    "web": {
+      "root": "apps/web",
+      "framework": "vite"
+    },
+    "witness-service": {
+      "root": "apps/witness-service",
+      "framework": "express"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
+  ]
+}
+

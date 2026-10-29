@@ -34,6 +34,16 @@ export class AuditCheckpointService {
     this.witnessUrl = this.configService.get<string>('WITNESS_SERVICE_URL') || 'http://localhost:3005';
   }
 
+  private getWitnessUrl(path: string): string {
+    const base = (
+      process.env.WITNESS_SERVICE_URL ||
+      this.configService.get<string>('WITNESS_SERVICE_URL') ||
+      this.witnessUrl
+    ).replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+    return `${base}/${cleanPath}`;
+  }
+
   /**
    * Builds a Merkle checkpoint over audit events, signs it, and submits to Witness and Fabric
    */
@@ -90,7 +100,7 @@ export class AuditCheckpointService {
     let witnessReceipt: any = null;
 
     try {
-      const res = await fetch(`${this.witnessUrl}/checkpoints`, {
+      const res = await fetch(this.getWitnessUrl('checkpoints'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -113,7 +123,7 @@ export class AuditCheckpointService {
         this.logger.warn(`Witness rejected checkpoint (${res.status}): ${errBody.error || res.statusText}`);
       }
     } catch (err: any) {
-      this.logger.warn(`Witness service unreachable at ${this.witnessUrl}: ${err.message}. Checkpoint recorded locally.`);
+      this.logger.warn(`Witness service unreachable at ${this.getWitnessUrl('')}: ${err.message}. Checkpoint recorded locally.`);
     }
 
     // Anchor Checkpoint on Fabric

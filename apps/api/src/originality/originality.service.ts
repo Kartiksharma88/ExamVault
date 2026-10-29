@@ -50,6 +50,16 @@ export class OriginalityService implements OnModuleInit {
   /**
    * Check health of Python originality service
    */
+  private getServiceUrl(path: string): string {
+    const base = (
+      process.env.ORIGINALITY_SERVICE_URL ||
+      this.config.get<string>('ORIGINALITY_SERVICE_URL') ||
+      this.serviceUrl
+    ).replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+    return `${base}/${cleanPath}`;
+  }
+
   async checkHealth(): Promise<{
     status: string;
     service: string;
@@ -58,7 +68,7 @@ export class OriginalityService implements OnModuleInit {
     available: boolean;
   }> {
     try {
-      const res = await fetch(`${this.serviceUrl}/health`, {
+      const res = await fetch(this.getServiceUrl('health'), {
         headers: { Authorization: `Bearer ${this.serviceToken}` },
         signal: AbortSignal.timeout(3000),
       });
@@ -156,7 +166,7 @@ export class OriginalityService implements OnModuleInit {
     }
 
     if (items.length > 0) {
-      const res = await fetch(`${this.serviceUrl}/index/feed`, {
+      const res = await fetch(this.getServiceUrl('index/feed'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,7 +252,7 @@ export class OriginalityService implements OnModuleInit {
     // Call Python originality service
     let serviceResponse: any;
     try {
-      const res = await fetch(`${this.serviceUrl}/check`, {
+      const res = await fetch(this.getServiceUrl('check'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -367,7 +377,7 @@ export class OriginalityService implements OnModuleInit {
 
     // Also add to in-memory originality index so future submissions check against this version
     try {
-      await fetch(`${this.serviceUrl}/index/feed`, {
+      await fetch(this.getServiceUrl('index/feed'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
