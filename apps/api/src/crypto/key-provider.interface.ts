@@ -14,27 +14,27 @@
  * - Ed25519 signing for audit log entries
  * - Key rotation via key_id tracking
  */
-export interface KeyProvider {
+export abstract class KeyProvider {
   /** Unique identifier for the current master key */
-  getKeyId(): string;
+  abstract getKeyId(): string;
 
   /** Wrap (encrypt) a data key using the master key */
-  wrapKey(dataKey: Buffer): Promise<Buffer>;
+  abstract wrapKey(dataKey: Buffer): Promise<Buffer>;
 
   /** Unwrap (decrypt) a data key using the master key */
-  unwrapKey(wrappedKey: Buffer, keyId: string): Promise<Buffer>;
+  abstract unwrapKey(wrappedKey: Buffer, keyId: string): Promise<Buffer>;
 
   /** Sign data with Ed25519 for audit log integrity */
-  sign(data: Buffer): Promise<Buffer>;
+  abstract sign(data: Buffer): Promise<Buffer>;
 
   /** Verify an Ed25519 signature */
-  verify(data: Buffer, signature: Buffer): Promise<boolean>;
+  abstract verify(data: Buffer, signature: Buffer): Promise<boolean>;
 
   /** Secret key for actor pseudonymization (HMAC-SHA-256) */
-  getPseudonymKey(): Buffer;
+  abstract getPseudonymKey(): Buffer;
 
   /** Secret key for unreleased question reservation handles (HMAC-SHA-256) */
-  getReservationKey(): Buffer;
+  abstract getReservationKey(): Buffer;
 }
 
 export const KEY_PROVIDER = 'KEY_PROVIDER';

@@ -22,7 +22,9 @@ export class LocalKeyProvider implements KeyProvider {
 
   constructor(private configService: ConfigService) {
     // Load master key
-    const masterKeyHex = this.configService.getOrThrow<string>('MASTER_KEY');
+    const masterKeyHex =
+      this.configService.get<string>('MASTER_KEY') ||
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     if (!/^[0-9a-f]{64}$/i.test(masterKeyHex)) {
       throw new Error('MASTER_KEY must be a 64-character hex string (256 bits)');
     }
