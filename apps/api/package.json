@@ -2,7 +2,6 @@
   "name": "@examvault/api",
   "version": "0.1.0",
   "private": true,
-  "main": "dist/main.js",
   "scripts": {
     "build": "pnpm --filter \"@examvault/shared\" --filter \"@examvault/audit-canonical\" run build && prisma generate && nest build",
     "dev": "nest start --watch",
