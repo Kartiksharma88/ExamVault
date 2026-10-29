@@ -83,11 +83,20 @@ async function bootstrapServer(): Promise<Express> {
 
 // Export default serverless handler for Vercel
 export default async function handler(req: Request, res: Response) {
-  const server = await bootstrapServer();
-  return server(req, res);
+  try {
+    const server = await bootstrapServer();
+    return server(req, res);
+  } catch (error: any) {
+    console.error('FATAL Serverless Handler Error:', error);
+    return res.status(500).json({
+      error: 'SERVERLESS_INITIALIZATION_ERROR',
+      message: error?.message || 'Server initialization failed',
+      stack: process.env.NODE_ENV === 'production' ? undefined : error?.stack,
+    });
+  }
 }
 
-// Standalone server for local development and Vercel container runtime
+// Standalone server for local development and non-serverless runtime
 async function bootstrap() {
   const server = await bootstrapServer();
   const port = Number(process.env.PORT || process.env.API_PORT || 3001);
@@ -101,4 +110,6 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+if (!process.env.VERCEL) {
+  bootstrap();
+}

@@ -16,6 +16,10 @@ export class AuditOutboxWorker implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    if (process.env.VERCEL) {
+      this.logger.log('Vercel serverless environment: skipping background outbox worker');
+      return;
+    }
     this.startWorker();
   }
 

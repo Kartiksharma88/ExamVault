@@ -39,6 +39,7 @@ export class OriginalityService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    if (process.env.VERCEL) return;
     // Attempt async initial feed sync after brief startup delay
     setTimeout(() => {
       this.syncBankIndex().catch((err) => {

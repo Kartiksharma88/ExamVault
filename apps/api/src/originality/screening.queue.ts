@@ -22,6 +22,10 @@ export class ScreeningQueue implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
+    if (process.env.VERCEL) {
+      this.logger.log('Vercel serverless environment: skipping background screening queue runner');
+      return;
+    }
     const dbUrl = this.config.get<string>('DATABASE_URL_UNPOOLED') || this.config.get<string>('DATABASE_URL');
     if (dbUrl) {
       try {

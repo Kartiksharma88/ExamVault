@@ -39,6 +39,7 @@ export class AuditService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    if (process.env.VERCEL) return;
     setImmediate(() => {
       this.backfillMissingPseudonymsAndOutbox().catch((err) => {
         this.logger.warn(`Backfill notice: ${err.message}`);
