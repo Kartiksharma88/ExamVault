@@ -87,6 +87,9 @@ importers:
       pg-boss:
         specifier: ^12.38.0
         version: 12.38.0(@opentelemetry/api@1.10.0)
+      prisma:
+        specifier: ^5.18.0
+        version: 5.22.0
       qrcode:
         specifier: ^1.5.3
         version: 1.5.4
@@ -139,9 +142,6 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.43)(supports-color@8.1.1)(ts-node@10.9.2(@types/node@20.19.43)(typescript@5.9.3))
-      prisma:
-        specifier: ^5.18.0
-        version: 5.22.0
       supertest:
         specifier: ^7.0.0
         version: 7.3.1(supports-color@8.1.1)
