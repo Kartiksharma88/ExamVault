@@ -1,12 +1,21 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express, { Express, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+let cachedServer: Express | null = null;
+
+async function bootstrapServer(): Promise<Express> {
+  if (cachedServer) {
+    return cachedServer;
+  }
+
+  const expressApp = express();
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
     logger: ['error', 'warn', 'log'],
   });
 
@@ -67,10 +76,29 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.API_PORT || 3001;
-  await app.listen(port);
-  console.log(`ExamVault API running on port ${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  await app.init();
+  cachedServer = expressApp;
+  return cachedServer;
+}
+
+// Export default serverless handler for Vercel
+export default async function handler(req: Request, res: Response) {
+  const server = await bootstrapServer();
+  return server(req, res);
+}
+
+// Standalone server for local development and Vercel container runtime
+async function bootstrap() {
+  const server = await bootstrapServer();
+  const port = Number(process.env.PORT || process.env.API_PORT || 3001);
+  try {
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`ExamVault API running on port ${port}`);
+      console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+    });
+  } catch (err) {
+    console.warn('Server listen warning:', err);
+  }
 }
 
 bootstrap();
