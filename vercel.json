@@ -4,6 +4,7 @@
     "api": {
       "root": "apps/api",
       "framework": "nestjs",
+      "entrypoint": "dist/main.js",
       "bindings": [
         {
           "type": "service",
