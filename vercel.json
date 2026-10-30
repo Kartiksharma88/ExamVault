@@ -3,7 +3,7 @@
   "services": {
     "api": {
       "root": "apps/api",
-      "runtime": "nodejs",
+      "framework": "nestjs",
       "entrypoint": "src/main.ts",
       "bindings": [
         {
