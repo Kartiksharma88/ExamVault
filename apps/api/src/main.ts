@@ -165,13 +165,17 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-// Listen on PORT (for both local development and Vercel Fluid Compute)
+// Listen on PORT for local development only. On Vercel, the runtime manages
+// the listener and invokes the `export default handler` below for each request.
+// Do NOT call server.listen() on Vercel — it would try to bind a port in a
+// serverless environment and cause FUNCTION_INVOCATION_FAILED on cold start.
 async function bootstrap() {
+  if (process.env.VERCEL) {
+    return;
+  }
   try {
     const server = await bootstrapServer();
     const port = Number(process.env.PORT || process.env.API_PORT || 3001);
-    // Listen on PORT for local dev; on Vercel the runtime intercepts/handles the
-    // listener, so keep the call (Vercel docs: conventional bootstrap() with app.listen()).
     server.listen(port, '0.0.0.0', () => {
       console.log(`ExamVault API running on port ${port}`);
       console.log(`Swagger docs: http://localhost:${port}/api/docs`);
@@ -181,6 +185,9 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch((err) => {
-  console.error('Fatal bootstrap error:', err);
-});
+// Only start the local dev server when not on Vercel.
+if (!process.env.VERCEL) {
+  bootstrap().catch((err) => {
+    console.error('Fatal bootstrap error:', err);
+  });
+}
