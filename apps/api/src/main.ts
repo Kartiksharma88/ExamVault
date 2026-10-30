@@ -165,16 +165,15 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-// Listen on PORT for local development only. On Vercel, the runtime manages
-// the listener and invokes the `export default handler` below for each request.
-// Do NOT call server.listen() on Vercel — it would try to bind a port in a
-// serverless environment and cause FUNCTION_INVOCATION_FAILED on cold start.
-async function bootstrap() {
+// bootstrap() — initialises NestJS and returns the Express app.
+// On Vercel the runtime invokes the exported handler per request;
+// locally we also listen on a port.
+async function bootstrap(): Promise<Express> {
+  const server = await bootstrapServer(); // always returns an app (NestJS or fallback)
   if (process.env.VERCEL) {
-    return;
+    return server;
   }
   try {
-    const server = await bootstrapServer();
     const port = Number(process.env.PORT || process.env.API_PORT || 3001);
     server.listen(port, '0.0.0.0', () => {
       console.log(`ExamVault API running on port ${port}`);
@@ -183,11 +182,9 @@ async function bootstrap() {
   } catch (err: any) {
     console.error('Bootstrap failure:', err);
   }
+  return server;
 }
 
-// Only start the local dev server when not on Vercel.
-if (!process.env.VERCEL) {
-  bootstrap().catch((err) => {
-    console.error('Fatal bootstrap error:', err);
-  });
-}
+bootstrap().catch((err) => {
+  console.error('Fatal bootstrap error:', err);
+});
