@@ -6,6 +6,7 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import express, { Express, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { HttpExceptionFilter } from './common/exceptions/http-exception.filter';
 import { AppModule } from './app.module';
 
 let cachedServer: Express | null = null;
@@ -65,6 +66,9 @@ async function bootstrapServer(): Promise<Express> {
     }),
   );
 
+  // Global exception filter — guarantees a JSON error response instead of a raw 500
+  app.useGlobalFilters(new HttpExceptionFilter());
+
   // OpenAPI / Swagger
   const config = new DocumentBuilder()
     .setTitle('ExamVault API')
@@ -101,11 +105,15 @@ export default async function handler(req: Request, res: Response) {
 async function bootstrap() {
   try {
     const server = await bootstrapServer();
-    const port = Number(process.env.PORT || process.env.API_PORT || 3001);
-    server.listen(port, '0.0.0.0', () => {
-      console.log(`ExamVault API running on port ${port}`);
-      console.log(`Swagger docs: http://localhost:${port}/api/docs`);
-    });
+    // On Vercel, the runtime manages the function listener — do not call listen(),
+    // otherwise cold-start can fail with EADDRINUSE / listener errors.
+    if (!process.env.VERCEL) {
+      const port = Number(process.env.PORT || process.env.API_PORT || 3001);
+      server.listen(port, '0.0.0.0', () => {
+        console.log(`ExamVault API running on port ${port}`);
+        console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+      });
+    }
   } catch (err: any) {
     console.error('Bootstrap failure:', err);
   }

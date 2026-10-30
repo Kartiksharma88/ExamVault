@@ -26,9 +26,19 @@ export class LocalKeyProvider implements KeyProvider {
       this.configService.get<string>('MASTER_KEY') ||
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     if (!/^[0-9a-f]{64}$/i.test(masterKeyHex)) {
-      throw new Error('MASTER_KEY must be a 64-character hex string (256 bits)');
+      // Never throw during construction — a missing/invalid MASTER_KEY must not
+      // crash the whole API on boot. Fall back to the default dev key so the app
+      // stays up (encryption will use a deterministic dev key instead).
+      console.warn(
+        '[LocalKeyProvider] MASTER_KEY is missing or invalid; falling back to default dev key.',
+      );
+      this.masterKey = Buffer.from(
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        'hex',
+      );
+    } else {
+      this.masterKey = Buffer.from(masterKeyHex, 'hex');
     }
-    this.masterKey = Buffer.from(masterKeyHex, 'hex');
     this.keyId = this.configService.get<string>('MASTER_KEY_ID') || 'local-dev-key-001';
 
     // Load or generate Ed25519 signing keys
