@@ -9,6 +9,8 @@ build/
 !packages/shared/dist/**
 !packages/audit-canonical/dist/
 !packages/audit-canonical/dist/**
+!apps/api/dist/
+!apps/api/dist/**/*
 
 # Environment
 .env
