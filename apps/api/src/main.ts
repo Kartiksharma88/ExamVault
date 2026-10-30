@@ -184,6 +184,6 @@ export default async function handler(req: Request, res: Response) {
 // bootstrap() — initialises NestJS and returns the Express app.
 // Vercel's NestJS runtime calls bootstrap() and intercepts the returned
 // Express app; do NOT call server.listen() (incompatible with serverless).
-async function bootstrap(): Promise<Express> {
+export async function bootstrap(): Promise<Express> {
   return await bootstrapServer();
 }
