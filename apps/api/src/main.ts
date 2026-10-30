@@ -166,11 +166,13 @@ export default async function handler(req: Request, res: Response) {
 }
 
 // bootstrap() — initialises NestJS and returns the Express app.
-// Vercel's NestJS integration calls bootstrap() and expects app.listen();
-// the runtime intercepts the listener. On error we handle it so the
-// process never crashes (no FUNCTION_INVOCATION_FAILED).
+// Only used for local development; on Vercel the exported `handler` below
+// is invoked directly per request.
 async function bootstrap(): Promise<Express> {
-  const server = await bootstrapServer(); // always returns an app (NestJS or fallback)
+  if (process.env.VERCEL) {
+    return buildFallbackServer('bootstrap disabled on Vercel');
+  }
+  const server = await bootstrapServer();
   const port = Number(process.env.PORT || process.env.API_PORT || 3001);
   server.listen(port, '0.0.0.0', () => {
     console.log(`ExamVault API running on port ${port}`);
@@ -182,6 +184,9 @@ async function bootstrap(): Promise<Express> {
   return server;
 }
 
-bootstrap().catch((err) => {
-  console.error('Fatal bootstrap error:', err);
-});
+// Start local dev server only when not on Vercel.
+if (!process.env.VERCEL) {
+  bootstrap().catch((err) => {
+    console.error('Fatal bootstrap error:', err);
+  });
+}
