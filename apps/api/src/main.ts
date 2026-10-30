@@ -71,11 +71,20 @@ async function bootstrapServer(): Promise<Express> {
     return cachedServer;
   }
 
+  // Hard timeout so NestJS cold-start can never hang the Vercel function.
+  const bootstrapTimeout = () =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('NestJS bootstrap timeout (15s)')), 15000),
+    );
+
   try {
     const expressApp = express();
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-      logger: ['error', 'warn', 'log'],
-    });
+    const app = await Promise.race([
+      NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+        logger: ['error', 'warn', 'log'],
+      }),
+      bootstrapTimeout(),
+    ]);
 
     // Security headers
     app.use(
@@ -137,15 +146,22 @@ async function bootstrapServer(): Promise<Express> {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
 
-    await app.init();
+    // Init with timeout too
+    await Promise.race([
+      app.init(),
+      bootstrapTimeout(),
+    ]);
     cachedServer = expressApp;
     return cachedServer;
   } catch (error: any) {
-    // NestJS failed to initialize on this cold start. Do NOT throw — return a
-    // fallback Express app so the Vercel function still responds with JSON
+    // NestJS failed to initialize or timed out on this cold start. Do NOT throw —
+    // return a fallback Express app so the Vercel function still responds with JSON
     // instead of FUNCTION_INVOCATION_FAILED / "A server error has occurred".
-    console.error('NestJS bootstrap failed, falling back to minimal error app:', error?.message);
-    cachedServer = buildFallbackServer(error?.message || 'unknown nestjs init error');
+    console.error(
+      'NestJS bootstrap failed, falling back to minimal error app:',
+      error?.message,
+    );
+    cachedServer = buildFallbackServer(error?.message || 'nestjs bootstrap failed');
     return cachedServer;
   }
 }
